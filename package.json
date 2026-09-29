@@ -1,0 +1,10 @@
+{
+  "name": "the-score-log-backend",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Serverless backend for The Score Log's Coach chatbot: auth, credits, Stripe checkout, and a Gemini proxy that keeps the API key server-side.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "stripe": "^16.12.0"
+  }
+}
