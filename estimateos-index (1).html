@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#F4F6FA" />
+<title>EstimateOS · Guesstimate practice, graded</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='%23D63A2F' stroke-width='9'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet">
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.3/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #F4F6FA; color: #141A2E; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+  #root { height: 100%; }
+  button { font-family: inherit; }
+  .app-shell { height: 100vh; height: 100dvh; }
+  .full-screen-shell { min-height: 100vh; min-height: 100dvh; }
+  .app-main-col, .app-main-col > .scoreos-canvas { min-height: 0; }
+  .app-topbar { flex-shrink: 0; }
+
+  /* Graph paper: the material guesstimates are actually worked out on. */
+  .graph-paper { background-color: #F4F6FA; background-image: linear-gradient(#E6EAF2 1px, transparent 1px), linear-gradient(90deg, #E6EAF2 1px, transparent 1px); background-size: 26px 26px; background-position: -1px -1px; }
+  .sheet { background: #FFFFFF; border: 1px solid #DCE2EC; border-radius: 16px; }
+  .eos-page { padding: 32px 32px 64px; max-width: 1120px; }
+  .row-btn:hover { background: #F6F8FC !important; }
+  .press { transition: transform .12s ease; }
+  .press:active { transform: scale(.98); }
+  button:focus-visible, textarea:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid #1B2A6B; outline-offset: 2px; }
+  .eos-editor:focus { border-color: #9FB0E8 !important; box-shadow: 0 0 0 3px rgba(27,42,107,.10); }
+  textarea::placeholder, input::placeholder { color: #8A94A8; }
+
+  /* Magic UI ShimmerButton, ported: a light sweep across the main call to action. */
+  .shimmer-btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,.7) 50%, transparent 75%); transform: translateX(-130%); animation: shimmer 3.2s ease-in-out 1s infinite; pointer-events: none; }
+  @keyframes shimmer { 0% { transform: translateX(-130%); } 45%, 100% { transform: translateX(130%); } }
+
+  /* Magic UI BorderBeam, ported: a light travelling round the border of today's quests. */
+  @property --beam { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  .border-beam { position: relative; }
+  .border-beam::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 2px; background: conic-gradient(from var(--beam), transparent 0deg 250deg, #FFD84D 300deg, #D63A2F 340deg, transparent 360deg); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: beam 6s linear infinite; pointer-events: none; }
+  @keyframes beam { to { --beam: 360deg; } }
+
+  /* Red-pen mark: the circle draws itself, the verdict is stamped. */
+  .pen-draw { stroke-dasharray: 620; stroke-dashoffset: 620; animation: draw 1s cubic-bezier(.6,.05,.3,1) .2s forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .stamp-in { animation: stamp .45s cubic-bezier(.2,1.6,.4,1) .9s both; }
+  @keyframes stamp { from { opacity: 0; transform: rotate(-4deg) scale(1.8); } to { opacity: 1; transform: rotate(-4deg) scale(1); } }
+
+  /* Magic UI AnimatedList, ported. */
+  .list-pop { animation: listpop .42s cubic-bezier(.2,1.2,.4,1) both; }
+  @keyframes listpop { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+  .check-pop { animation: checkpop .35s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes checkpop { from { transform: scale(.4); } to { transform: scale(1); } }
+  .toast-in { animation: toastin .4s cubic-bezier(.2,1.2,.4,1); }
+  @keyframes toastin { from { opacity: 0; transform: translate(-50%, -14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .modal-in { animation: modalin .22s ease-out; }
+  @keyframes modalin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .pulse-dot::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 8px; border-radius: 99px; background: #D63A2F; animation: pulse 1s ease-in-out infinite; vertical-align: middle; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  @media (max-width: 860px) {
+    .caseos-sidebar { display: none !important; }
+    .mobile-menu-btn { display: flex !important; }
+  }
+  @media (max-width: 640px) {
+    .eos-page { padding: 20px 16px 44px !important; }
+    .eos-grid { grid-template-columns: 1fr !important; }
+    .eos-grid > * { grid-column: auto !important; grid-row: auto !important; }
+    .eos-strip { grid-template-columns: 1fr 1fr !important; }
+    .eos-strip > *:nth-child(3) { border-left: none !important; }
+    .eos-strip > *:nth-child(n+3) { border-top: 1px solid #E9EDF4; }
+    .eos-editor { min-height: 46vh !important; min-height: 46dvh !important; }
+    .eos-workspace-actions { flex-direction: column; align-items: stretch !important; }
+    .eos-cat-label { width: 118px !important; }
+    .app-topbar { padding: 0 12px !important; gap: 8px !important; }
+    .coach-card { min-height: 40vh; }
+  }
+  @media (max-width: 480px) {
+    .topbar-view-label, .topbar-xp, .topbar-avatar { display: none !important; }
+    .readiness-pill-label { display: none; }
+  }
+  .readiness-pill-label { margin-left: 4px; }
+  .coach-card { min-height: calc(100dvh - 330px); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    .pen-draw { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react,es2017">
+
+const { useState, useMemo, useEffect } = React;
+
+/* ============================== DESIGN TOKENS ============================== */
+/* Deliberately restricted: ivory for the environment, navy for important information
+   and primary actions, pale blue for secondary accents/progress, gold reserved for
+   achievements/milestones/highlights only. No per-widget rainbow — colour is used
+   with intent, not decoration. Legacy token names (blue, green, red, gold, navy,
+   blueSoft etc.) are kept as aliases so every component below keeps working; green/red
+   are now used only as small semantic text/icon accents (strong/weak), never as
+   widget fills. */
+const C = {
+  bg: "#F4F6FA", panel: "#FFFFFF", panelAlt: "#EEF1F7", hover: "#E6EBF4",
+  border: "#DCE2EC", borderSoft: "#E9EDF4", text: "#141A2E", textMid: "#525D75", textDim: "#8A94A8",
+  navy: "#1B2A6B", navy2: "#2A3C8F",
+  paleBlue: "#E7ECFB", paleBlueBorder: "#C9D4F3",
+  gold: "#FFD84D", goldSoft: "#FFF5C9", goldDeep: "#7A5A00",
+  green: "#178A4C", red: "#D63A2F", greenSoft: "#E1F4E8", redSoft: "#FCE7E4",
+  // aliases kept so shared components keep working
+  blue: "#1B2A6B", blueSoft: "#E7ECFB",
+  amber: "#FFD84D", amberSoft: "#FFF5C9",
+  lavender: "#2A3C8F", lavenderSoft: "#E7ECFB",
+};
+const navInactive = "#5E6984";
+const FONT = "'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
+/* ============================== BACKEND CONFIG ==============================
+   Real accounts + credits + AI coach, same backend as before (Vercel functions
+   at /api/chat, /api/me, /api/checkout). SUPABASE_URL and SUPABASE_ANON_KEY are
+   public by design — the anon/publishable key only grants what Supabase's Row
+   Level Security policies allow. */
+const SUPABASE_URL = "https://tasiyrxiltcrurhqaxfm.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_PHLWI_XC9Ju8wbVBoV256A_2PqOIIAH";
+const sb = (window.supabase && SUPABASE_URL.indexOf("YOUR-PROJECT") === -1)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+/* ============================== ICONS (self-contained, no deps) ============================== */
+function Ic({ size = 16, color, style, children, viewBox = "0 0 24 24" }) {
+  return (
+    <svg width={size} height={size} viewBox={viewBox} fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
+      {children}
+    </svg>
+  );
+}
+const Icons = {
+  Dashboard: (p) => <Ic {...p}><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></Ic>,
+  Menu: (p) => <Ic {...p}><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></Ic>,
+  Briefcase: (p) => <Ic {...p}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12" x2="21" y2="12"/></Ic>,
+  Chart: (p) => <Ic {...p}><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="12" width="3" height="8"/><rect x="11" y="7" width="3" height="13"/><rect x="16" y="15" width="3" height="5"/></Ic>,
+  Alert: (p) => <Ic {...p}><path d="M12 3 2 20h20L12 3z"/><line x1="12" y1="9" x2="12" y2="13.5"/><circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none"/></Ic>,
+  Brain: (p) => <Ic {...p}><circle cx="12" cy="10" r="6"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="10" y1="17" x2="14" y2="17"/></Ic>,
+  Users: (p) => <Ic {...p}><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.2 2.7-5.5 6-5.5s6 2.3 6 5.5"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M15.3 12.3c2.6.4 4.7 2.2 4.7 4.7"/></Ic>,
+  Calendar: (p) => <Ic {...p}><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></Ic>,
+  Settings: (p) => <Ic {...p}><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="4.2"/><line x1="12" y1="19.8" x2="12" y2="22"/><line x1="2" y1="12" x2="4.2" y2="12"/><line x1="19.8" y1="12" x2="22" y2="12"/></Ic>,
+  Plus: (p) => <Ic {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Ic>,
+  Check: (p) => <Ic {...p}><polyline points="5 13 10 18 19 7"/></Ic>,
+  X: (p) => <Ic {...p}><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></Ic>,
+  Target: (p) => <Ic {...p}><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.7" fill="currentColor" stroke="none"/></Ic>,
+  Linkedin: (p) => <Ic {...p}><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="8" y1="10.5" x2="8" y2="17"/><circle cx="8" cy="6.8" r="0.9" fill="currentColor" stroke="none"/><path d="M12 17v-4a2 2 0 0 1 4 0v4"/><line x1="12" y1="10.5" x2="12" y2="17"/></Ic>,
+  ArrowUpRight: (p) => <Ic {...p}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="8 7 17 7 17 16"/></Ic>,
+  Minus: (p) => <Ic {...p}><line x1="5" y1="12" x2="19" y2="12"/></Ic>,
+  TrendUp: (p) => <Ic {...p}><polyline points="4 16 10 10 14 13 20 6"/><polyline points="14 6 20 6 20 12"/></Ic>,
+  TrendDown: (p) => <Ic {...p}><polyline points="4 8 10 14 14 11 20 18"/><polyline points="20 12 20 18 14 18"/></Ic>,
+  Sparkles: (p) => <Ic {...p} viewBox="0 0 24 24"><path d="M12 3 L13.2 10.8 L21 12 L13.2 13.2 L12 21 L10.8 13.2 L3 12 L10.8 10.8 Z" fill="currentColor" stroke="none"/></Ic>,
+  Mail: (p) => <Ic {...p}><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></Ic>,
+  CheckCircle2: (p) => <Ic {...p}><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></Ic>,
+  Circle: (p) => <Ic {...p}><circle cx="12" cy="12" r="8"/></Ic>,
+  Zap: (p) => <Ic {...p} viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10 13 2" fill="currentColor" stroke="none"/></Ic>,
+};
+
+
+function LineChartSVG({ data, height = 220, max = 10 }) {
+  const w = 560, h = height, padL = 28, padB = 22, padT = 10, padR = 10;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const n = data.length;
+  const pts = data.map((d, i) => {
+    const x = padL + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+    const y = padT + innerH - (d.avg / max) * innerH;
+    return { x, y, ...d };
+  });
+  const path = pts.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  const gridYs = [0, 2.5, 5, 7.5, 10];
+  return (
+    <svg viewBox={"0 0 " + w + " " + h} width="100%" height={height} preserveAspectRatio="none">
+      {gridYs.map((g) => {
+        const y = padT + innerH - (g / max) * innerH;
+        return <line key={g} x1={padL} x2={w - padR} y1={y} y2={y} stroke={C.borderSoft} strokeWidth="1" />;
+      })}
+      <path d={path} fill="none" stroke={C.blue} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3.5" fill={C.blue} />)}
+      {pts.map((p, i) => (
+        <text key={"t" + i} x={p.x} y={h - 4} fontSize="10" fill={C.textDim} textAnchor="middle" fontFamily={FONT}>{p.week}</text>
+      ))}
+    </svg>
+  );
+}
+function RadarSVG({ data, size = 260, max = 10 }) {
+  const cx = size / 2, cy = size / 2, r = size / 2 - 34;
+  const n = data.length;
+  const angle = (i) => (Math.PI * 2 * i) / n - Math.PI / 2;
+  const pt = (i, val) => {
+    const a = angle(i), rr = (val / max) * r;
+    return [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
+  };
+  const rings = [0.25, 0.5, 0.75, 1];
+  const dataPts = data.map((d, i) => pt(i, d.value));
+  const polyPoints = dataPts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+  return (
+    <svg viewBox={"0 0 " + size + " " + size} width="100%" height={size}>
+      {rings.map((f) => {
+        const ringPts = data.map((_, i) => pt(i, max * f)).map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+        return <polygon key={f} points={ringPts} fill="none" stroke={C.borderSoft} strokeWidth="1" />;
+      })}
+      {data.map((_, i) => {
+        const [x, y] = pt(i, max);
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={C.borderSoft} strokeWidth="1" />;
+      })}
+      <polygon points={polyPoints} fill={C.blue} fillOpacity="0.28" stroke={C.blue} strokeWidth="2" />
+      {dataPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="3" fill={C.blue} />)}
+      {data.map((d, i) => {
+        const a = angle(i), lr = r + 18;
+        const x = cx + lr * Math.cos(a), y = cy + lr * Math.sin(a);
+        return <text key={"l" + i} x={x} y={y} fontSize="11" fill={C.textMid} textAnchor="middle" dominantBaseline="middle" fontFamily={FONT}>{d.skill}</text>;
+      })}
+    </svg>
+  );
+}
+
+const NOW = new Date();
+const daysAgo = (n) => { const d = new Date(NOW); d.setDate(d.getDate() - n); return d; };
+const daysFromNow = (n) => { const d = new Date(NOW); d.setDate(d.getDate() + n); return d; };
+const fmtDate = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const fmtDateFull = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+const round1 = (n) => Math.round(n * 10) / 10;
+
+
+function useAnimatedNumber(target, duration = 700) {
+  const [display, setDisplay] = useState(target);
+  const prevRef = React.useRef(target);
+  const firstRef = React.useRef(true);
+  React.useEffect(() => {
+    const from = firstRef.current ? 0 : prevRef.current;
+    const to = target;
+    firstRef.current = false;
+    if (from === to) { setDisplay(to); prevRef.current = to; return; }
+    let raf;
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(from + (to - from) * eased);
+      if (t < 1) { raf = requestAnimationFrame(tick); } else { setDisplay(to); prevRef.current = to; }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => raf && cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return display;
+}
+function Card({ children, style, ...rest }) { return <div style={{ background: C.panel, border: "1px solid " + C.border, borderRadius: 14, ...style }} {...rest}>{children}</div>; }
+function Pill({ children, tone = "default", style, className }) {
+  const tones = { default: { bg: C.hover, fg: C.textMid }, blue: { bg: C.blueSoft, fg: C.blue }, green: { bg: C.greenSoft, fg: C.green }, amber: { bg: C.amberSoft, fg: C.amber }, red: { bg: C.redSoft, fg: C.red } };
+  const t = tones[tone] || tones.default;
+  return <span className={className} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 999, fontSize: 12, fontWeight: 500, background: t.bg, color: t.fg, whiteSpace: "nowrap", ...style }}>{children}</span>;
+}
+function SkillBar({ label, value, max = 10, compact }) {
+  const pct = (value / max) * 100;
+  return (
+    <div style={{ marginBottom: compact ? 10 : 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+        <span style={{ fontSize: 13, color: C.textMid }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>{value.toFixed(1)}</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: C.borderSoft, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: pct + "%", borderRadius: 3, background: scoreColor(value), transition: "width 0.4s ease" }} />
+      </div>
+    </div>
+  );
+}
+function AnimatedNumber({ value, duration = 700, suffix = "" }) {
+  const [display, setDisplay] = useState(0);
+  const fromRef = React.useRef(0);
+  React.useEffect(() => {
+    const from = fromRef.current;
+    const start = performance.now();
+    let raf;
+    const tick = (t) => {
+      const p = Math.min(1, (t - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplay(Math.round(from + (value - from) * eased));
+      if (p < 1) raf = requestAnimationFrame(tick); else fromRef.current = value;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <span style={{ fontVariantNumeric: "tabular-nums" }}>{display}{suffix}</span>;
+}
+function TrendTag({ delta, suffix = "" }) {
+  if (delta === undefined || delta === null || Math.abs(delta) < 0.05) return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: C.textDim }}><Icons.Minus size={11} />flat</span>;
+  const up = delta > 0;
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, color: up ? C.green : C.red }}>{up ? <Icons.TrendUp size={11} /> : <Icons.TrendDown size={11} />}{up ? "+" : ""}{delta.toFixed(1)}{suffix}</span>;
+}
+function ReadinessRing({ value, size = 108, stroke = 9 }) {
+  const animated = useAnimatedNumber(value);
+  const r = (size - stroke) / 2, circ = 2 * Math.PI * r, offset = circ - (clamp(animated, 0, 100) / 100) * circ;
+  const color = value >= 75 ? C.green : value >= 55 ? C.amber : C.red;
+  return (
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={C.borderSoft} strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 26, fontWeight: 700, color: C.text, letterSpacing: -0.5 }}>{Math.round(animated)}</span>
+        <span style={{ fontSize: 10, color: C.textDim, marginTop: -2 }}>/ 100</span>
+      </div>
+    </div>
+  );
+}
+function Modal({ open, onClose, title, children, width = 560 }) {
+  if (!open) return null;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,26,46,0.38)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+      <div className="modal-in" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: width, maxHeight: "86vh", overflowY: "auto", background: C.panel, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 20px 48px rgba(21,27,46,0.18)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid " + C.border, position: "sticky", top: 0, background: C.panel }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.text }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.textMid, cursor: "pointer", padding: 4 }}><Icons.X size={18} /></button>
+        </div>
+        <div style={{ padding: 20 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+function FieldLabel({ children }) { return <label style={{ display: "block", fontSize: 12, color: C.textMid, marginBottom: 6 }}>{children}</label>; }
+const inputStyle = { width: "100%", boxSizing: "border-box", background: C.panelAlt, border: "1px solid " + C.border, borderRadius: 7, padding: "8px 10px", color: C.text, fontSize: 13, outline: "none", fontFamily: FONT };
+function TextInput(props) { return <input style={inputStyle} {...props} />; }
+function TextArea(props) { return <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 56 }} {...props} />; }
+function Select({ options, ...props }) { return <select style={{ ...inputStyle, appearance: "auto" }} {...props}>{options.map((o) => <option key={o} value={o}>{o}</option>)}</select>; }
+function ScoreSlider({ label, value, onChange }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+        <span style={{ fontSize: 13, color: C.textMid }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: scoreColor(value) }}>{value}</span>
+      </div>
+      <input type="range" min={1} max={10} value={value} onChange={(e) => onChange(Number(e.target.value))} style={{ width: "100%", accentColor: C.blue }} />
+    </div>
+  );
+}
+function PrimaryButton({ children, onClick, style, ...rest }) { return <button onClick={onClick} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13.5, fontWeight: 650, fontFamily: FONT, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, ...style }} {...rest}>{children}</button>; }
+function GhostButton({ children, onClick, style, ...rest }) { return <button onClick={onClick} style={{ background: C.panel, color: C.text, border: "1px solid " + C.border, borderRadius: 10, padding: "9px 16px", fontSize: 13.5, fontWeight: 550, fontFamily: FONT, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, ...style }} {...rest}>{children}</button>; }
+function SectionTitle({ children, action }) { return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}><h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: C.text, letterSpacing: -0.2 }}>{children}</h2>{action}</div>; }
+
+/* ============================== NAV / SHELL ============================== */
+
+function renderInline(line) {
+  const parts = String(line).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => (part.startsWith("**") && part.endsWith("**"))
+    ? <strong key={i}>{part.slice(2, -2)}</strong>
+    : <React.Fragment key={i}>{part}</React.Fragment>);
+}
+function renderCoachText(text) {
+  if (!text) return null;
+  const paragraphs = String(text).split(/\n{2,}/);
+  return paragraphs.map((para, pi) => {
+    const lines = para.split("\n");
+    const isList = lines.length > 1 && lines.every((l) => /^\s*[-*]\s+/.test(l));
+    if (isList) {
+      return (
+        <ul key={pi} style={{ margin: "4px 0 8px", paddingLeft: 18 }}>
+          {lines.map((l, li) => <li key={li} style={{ marginBottom: 4 }}>{renderInline(l.replace(/^\s*[-*]\s+/, ""))}</li>)}
+        </ul>
+      );
+    }
+    return (
+      <p key={pi} style={{ margin: pi === 0 ? "0 0 8px" : "8px 0" }}>
+        {lines.map((l, li) => <React.Fragment key={li}>{li > 0 && <br />}{renderInline(l)}</React.Fragment>)}
+      </p>
+    );
+  });
+}
+function CoachMessage({ from, text, typing }) {
+  const isCoach = from === "coach";
+  return (
+    <div style={{ display: "flex", justifyContent: isCoach ? "flex-start" : "flex-end", marginBottom: 12 }}>
+      <div style={{ maxWidth: "82%", padding: "10px 14px", borderRadius: 14, background: isCoach ? C.blueSoft : C.panelAlt, color: C.text, fontSize: 13.5, lineHeight: 1.5, fontStyle: typing ? "italic" : "normal", opacity: typing ? 0.65 : 1 }}>
+        {isCoach ? renderCoachText(text) : text}
+      </div>
+    </div>
+  );
+}
+
+
+function AchievementToast({ achievement, onDone }) {
+  React.useEffect(() => { const t = setTimeout(onDone, 3200); return () => clearTimeout(t); }, [achievement]);
+  if (!achievement) return null;
+  return (
+    <div className="achievement-in" style={{ position: "fixed", top: 18, left: "50%", transform: "translateX(-50%)", zIndex: 300, display: "flex", alignItems: "center", gap: 10, background: C.navy, color: C.bg, padding: "12px 18px", borderRadius: 12, boxShadow: "0 12px 30px rgba(29,53,87,0.28)" }}>
+      <div style={{ width: 30, height: 30, borderRadius: 999, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icons.Sparkles size={14} color={C.navy} /></div>
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 700 }}>Achievement unlocked</div>
+        <div style={{ fontSize: 12, opacity: 0.85 }}>{achievement.label} — {achievement.desc}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== QUESTION BANK ==============================
+   50 original guesstimates written in the style of consulting, product and
+   admissions interviews. Not attributed to any specific firm or university —
+   swap this array for your own bank and everything else keeps working.
+   drivers: what a strong answer should account for (shown as the hint, and given
+   to the grader as a reference). tip: one-line structuring nudge. */
+const CATEGORIES = [
+  { key: "consumer", label: "Consumer & Retail" },
+  { key: "mobility", label: "Transport & Mobility" },
+  { key: "tech", label: "Tech & Digital" },
+  { key: "food", label: "Food & Beverage" },
+  { key: "health", label: "Healthcare" },
+  { key: "cities", label: "Cities & Infrastructure" },
+  { key: "media", label: "Media & Sports" },
+  { key: "education", label: "Education" },
+  { key: "energy", label: "Energy & Environment" },
+  { key: "finance", label: "Banking & Finance" },
+];
+const DIFFICULTIES = ["Easy", "Medium", "Hard"];
+const Q = (id, cat, difficulty, type, prompt, drivers, tip) => ({ id, cat, difficulty, type, prompt, drivers, tip });
+
+const QUESTIONS = [
+  Q("q01", "consumer", "Easy", "Volume", "How many toothbrushes are sold in India in a year?", ["Population, split urban vs rural", "Share who use a toothbrush", "Replacement cycle per person"], "Estimate users first, then divide 12 months by how often each person replaces a brush."),
+  Q("q02", "consumer", "Medium", "Revenue", "Estimate the annual revenue of a single Starbucks store in a busy Mumbai business district.", ["Opening hours and dayparts (morning rush, lunch, evening)", "Customers per hour in each daypart", "Average bill per customer", "Weekday vs weekend traffic"], "Build daily revenue from dayparts, then scale to a year, adjusting for weekends."),
+  Q("q03", "consumer", "Medium", "Volume", "How many pairs of sneakers are sold in the US each year?", ["US population by age group", "Pairs bought per person per year in each group", "Share of footwear that is sneakers"], "Segment by age — teens and young adults buy far more than older adults."),
+  Q("q04", "consumer", "Hard", "Market sizing", "What is the annual market size, in rupees, for packaged pet food in urban India?", ["Urban households", "Share owning a dog or cat", "Share feeding packaged food vs home food", "Monthly spend per pet"], "Most of this funnel is conversion: households, then pet owners, then packaged-food buyers, then spend."),
+  Q("q05", "consumer", "Easy", "Volume", "How many umbrellas are sold in Mumbai every year?", ["Population and households", "Umbrellas owned per person", "How often umbrellas are lost or broken each monsoon"], "Replacement drives this — think about how often umbrellas break or get left behind."),
+
+  Q("q06", "mobility", "Easy", "Capacity", "How many petrol pumps are there in Delhi?", ["Number of vehicles, two-wheelers vs cars", "How often each vehicle refuels", "Vehicles one pump can serve per day"], "Estimate daily refuelling demand, then divide by one pump's daily capacity."),
+  Q("q07", "mobility", "Medium", "Volume", "How many ride-hailing trips (Uber, Ola, Rapido) happen in Bengaluru on a typical weekday?", ["Population and working-age share", "Share who use ride-hailing on a given day", "Trips per user per day", "Split across cabs, autos and bike taxis"], "Segment users by frequency: daily commuters vs occasional riders."),
+  Q("q08", "mobility", "Medium", "Volume", "How many commercial flights take off from US airports every day?", ["Number of airports by size (hub, mid, small)", "Departures per day at each tier", "Domestic vs international share"], "Tier the airports — a handful of hubs account for a big share of departures."),
+  Q("q09", "mobility", "Hard", "Revenue", "Estimate the annual toll revenue of the Mumbai–Pune Expressway.", ["Vehicles per day by type", "Toll per vehicle type", "Weekday vs weekend and seasonal traffic"], "Segment by vehicle type — trucks pay much more per trip than cars."),
+  Q("q10", "mobility", "Medium", "Volume", "How many electric two-wheelers will be sold in India this year?", ["Total two-wheeler sales per year", "EV share of new sales", "Split by city tier"], "Start from total two-wheeler sales, then apply an EV share you can justify."),
+
+  Q("q11", "tech", "Easy", "Volume", "How many smartphones are sold in India each year?", ["Population", "Share with a smartphone", "Replacement cycle in years", "First-time buyers each year"], "Annual sales are roughly replacements (users divided by replacement cycle) plus new users."),
+  Q("q12", "tech", "Medium", "Volume", "How many Google searches are made in the US in a day?", ["Internet users", "Share using Google", "Searches per user per day by segment"], "Segment by user type — students and office workers search far more than others."),
+  Q("q13", "tech", "Medium", "Revenue", "Estimate the monthly revenue of a leading food-delivery app in India.", ["Orders per day", "Average order value", "Commission and delivery fees", "Ads revenue"], "Revenue is the platform's take, not total order value — separate GMV from revenue."),
+  Q("q14", "tech", "Hard", "Market sizing", "How much mobile data, in petabytes, does India consume in a month?", ["Smartphone users", "Data per user per month by segment", "Unit conversion from GB to PB"], "Do the unit conversion carefully — 1 PB is a million GB."),
+  Q("q15", "tech", "Easy", "Volume", "How many emails do employees of a 5,000-person company send on a workday?", ["Employees by role", "Emails sent per person per day", "Share of roles that work mostly on email"], "Different roles send very different volumes — segment before multiplying."),
+
+  Q("q16", "food", "Easy", "Volume", "How many cups of chai are consumed in Delhi every day?", ["Population", "Share who drink chai daily", "Cups per drinker per day", "At-home vs street stalls"], "Segment drinkers by cups per day rather than using one average for everyone."),
+  Q("q17", "food", "Medium", "Operations", "How many pizzas does a busy Domino's outlet in a metro city sell in a day?", ["Opening hours and peak windows", "Orders per hour at peak vs off-peak", "Pizzas per order", "Kitchen capacity as a cap"], "Check your demand estimate against the kitchen's physical capacity."),
+  Q("q18", "food", "Medium", "Market sizing", "Estimate the annual volume of packaged drinking water sold in India, in litres.", ["Population, urban vs rural", "Consumption occasions (travel, offices, events, homes)", "Litres per occasion", "20-litre jars vs bottles"], "Separate 20-litre jars from small bottles — they're very different markets."),
+  Q("q19", "food", "Hard", "Revenue", "Estimate the annual revenue of McDonald's restaurants in India.", ["Number of outlets", "Customers per outlet per day", "Average bill", "Delivery share"], "Build one outlet's revenue carefully, then multiply by the outlet count."),
+  Q("q20", "food", "Easy", "Volume", "How many eggs are eaten in the US every day?", ["Population", "Eggs eaten directly per person per week", "Eggs used in baked and processed food"], "Don't forget indirect consumption — eggs in bakery and processed foods add a lot."),
+
+  Q("q21", "health", "Medium", "Capacity", "How many pharmacies are there in Bengaluru?", ["Population", "Pharmacy visits per person per year", "Customers one pharmacy serves per day"], "Use a demand-side estimate, then sanity-check it against how densely pharmacies appear on a street."),
+  Q("q22", "health", "Medium", "Capacity", "How many hospital beds does a city of 10 million people need?", ["Hospital admissions per person per year", "Average length of stay", "Target occupancy rate"], "Beds equal admissions times average stay, divided by 365, divided by target occupancy."),
+  Q("q23", "health", "Easy", "Volume", "How many pairs of spectacles are sold in India each year?", ["Population by age", "Share needing vision correction", "Share who actually wear glasses", "Replacement cycle"], "Vision problems rise sharply after 40 — segment by age."),
+  Q("q24", "health", "Hard", "Market sizing", "What is the annual market size, in rupees, for diagnostic lab tests in India?", ["Population by segment (urban/rural, age)", "Tests per person per year", "Average price per test", "Hospital vs standalone labs"], "Chronic-condition patients drive repeat testing — size them separately."),
+  Q("q25", "health", "Medium", "Capacity", "How many dentists does the US need?", ["Population", "Dental visits per person per year", "Patients a dentist sees per day", "Working days per year"], "Total visits per year divided by one dentist's annual capacity."),
+
+  Q("q26", "cities", "Easy", "Volume", "How many traffic signals are there in Mumbai?", ["City area or arterial road length", "Major intersections per km of arterial road", "Share of intersections with signals"], "Only arterial roads need signals — don't count every lane."),
+  Q("q27", "cities", "Medium", "Volume", "How much water does Delhi consume in a day?", ["Population", "Domestic use per person per day", "Commercial and industrial use", "Distribution losses"], "Add non-domestic use and leakage on top of household consumption."),
+  Q("q28", "cities", "Medium", "Volume", "How many elevators are there in New York City?", ["Buildings by height band", "Elevators per building in each band", "Residential vs commercial"], "Low-rise buildings often have none — most elevators sit in a minority of tall buildings."),
+  Q("q29", "cities", "Hard", "Market sizing", "How many new homes need to be built in Bengaluru each year?", ["Population growth and migration", "Average household size", "Replacement of old housing stock", "Current shortfall"], "New households formed each year is the core driver; migration dominates in Bengaluru."),
+  Q("q30", "cities", "Easy", "Capacity", "How many parking spaces does a large suburban mall need?", ["Peak-day visitors", "Share arriving by car", "Visitors per car", "Average time spent and turnover"], "Size for the peak hour, not the daily total — turnover matters."),
+
+  Q("q31", "media", "Easy", "Volume", "How many movie tickets are sold in India on a typical weekend?", ["Number of screens", "Shows per screen per day", "Seats per screen", "Average occupancy"], "Supply side works well here: screens times shows times seats times occupancy."),
+  Q("q32", "media", "Medium", "Revenue", "Estimate the TV and streaming ad revenue from a single IPL match.", ["Ad breaks per match (overs, timeouts, wickets)", "Ad seconds per break", "Rate per 10 seconds"], "Count the breaks carefully — ad inventory is fixed by the match structure."),
+  Q("q33", "media", "Medium", "Volume", "How many hours of YouTube are watched in India in a day?", ["Internet users", "Share using YouTube daily", "Minutes watched per user per day"], "Segment by how heavily different users watch — one average hides the heavy users."),
+  Q("q34", "media", "Hard", "Revenue", "Estimate the annual revenue of an NBA team.", ["Tickets (games, attendance, price)", "Media rights share", "Sponsorship", "Merchandise and concessions"], "List every revenue stream before sizing — media rights are often the biggest."),
+  Q("q35", "media", "Easy", "Operations", "How many tennis balls are used at Wimbledon in a year?", ["Number of matches across all events", "Games per match", "Ball change frequency", "Balls per change"], "Balls are changed on a fixed games schedule — use it."),
+
+  Q("q36", "education", "Easy", "Volume", "How many students sit for Class 12 board exams in India each year?", ["Children in the relevant age cohort", "Share still enrolled at Class 12", "Boards covered"], "Start from the age cohort, then apply the drop-off through secondary school."),
+  Q("q37", "education", "Medium", "Market sizing", "What is the annual market size for engineering-entrance coaching in India?", ["Students appearing for entrance exams", "Share taking paid coaching", "Average fees by format (classroom, online)"], "Split offline and online coaching — prices differ by an order of magnitude."),
+  Q("q38", "education", "Medium", "Capacity", "How many K–12 teachers are there in the US?", ["School-age population", "Enrollment rate", "Students per teacher"], "Students divided by students per teacher, with a small adjustment for specialist staff."),
+  Q("q39", "education", "Hard", "Revenue", "Estimate the annual revenue of a large private US research university.", ["Students times net tuition", "Research grants", "Endowment payout", "Housing, dining and hospital revenue"], "Net tuition is far below sticker price — account for financial aid."),
+  Q("q40", "education", "Easy", "Volume", "How many pencils does a school of 1,000 students use in a year?", ["Students by grade", "Pencils per student per term", "Teacher and exam use"], "Younger students go through pencils much faster — segment by grade."),
+
+  Q("q41", "energy", "Easy", "Capacity", "How many solar panels would it take to power a typical urban Indian home?", ["Monthly electricity use in kWh", "Daily output of one panel", "Peak sun hours"], "Convert monthly use to daily kWh, then divide by one panel's daily output."),
+  Q("q42", "energy", "Medium", "Capacity", "How many public EV charging points will India need in 2030?", ["EVs on the road in 2030", "Share relying on public charging", "Charges per vehicle per week", "Vehicles one charger serves"], "Most charging happens at home — size only the public share."),
+  Q("q43", "energy", "Medium", "Volume", "How much plastic waste does Mumbai generate in a day?", ["Population", "Waste per person per day", "Plastic share of waste", "Commercial waste"], "Estimate total waste first, then apply the plastic share."),
+  Q("q44", "energy", "Hard", "Market sizing", "Estimate the electricity consumed by air conditioners in Delhi in a year.", ["Households and offices", "AC penetration", "Hours of use per day across seasons", "Power draw per AC"], "Seasonality matters — ACs run heavily for only part of the year."),
+  Q("q45", "energy", "Easy", "Volume", "How many trees would it take to absorb one person's annual carbon emissions in India?", ["Emissions per person per year", "CO2 absorbed by one mature tree per year"], "Keep units consistent — tonnes vs kilograms trips people up."),
+
+  Q("q46", "finance", "Easy", "Capacity", "How many ATMs are there in India?", ["Adults with bank accounts", "ATM withdrawals per person per month", "Transactions one ATM handles per day"], "Demand side: withdrawals per day divided by one ATM's daily capacity."),
+  Q("q47", "finance", "Medium", "Volume", "How many UPI payments happen in India in a day?", ["UPI users", "Active share on a given day", "Transactions per active user per day", "Merchant vs person-to-person"], "Separate small everyday merchant payments from person-to-person transfers."),
+  Q("q48", "finance", "Hard", "Revenue", "Estimate the annual interchange fee revenue banks earn from credit cards in India.", ["Credit cards in use", "Spend per card per month", "Interchange rate"], "Revenue is total card spend times the interchange rate — get spend right first."),
+  Q("q49", "finance", "Medium", "Volume", "How much cash is withdrawn from ATMs in India in a day, in rupees?", ["Number of ATMs", "Withdrawals per ATM per day", "Average withdrawal amount"], "Supply side works: ATMs times withdrawals each times the average amount."),
+  Q("q50", "finance", "Medium", "Volume", "How many credit cards are in circulation in the US?", ["Adults", "Share holding a credit card", "Cards per cardholder"], "Cardholders usually hold several cards — the per-holder number matters most."),
+];
+
+/* ============================== PRODUCT CONFIG ============================== */
+const STORAGE_KEY = "estimateos_state_v1";
+
+/* Grading rubric. Weights favour method over the final number — that's how
+   interviewers actually score guesstimates. Overall (0–100) is always computed
+   here from the five dimension scores, never trusted from the model directly,
+   so the number stays consistent across every attempt. */
+const RUBRIC = [
+  { key: "structure", label: "Structure", short: "Structure", weight: 0.3, desc: "A clear top-down breakdown into a logical equation or tree" },
+  { key: "assumptions", label: "Assumptions", short: "Assumptions", weight: 0.25, desc: "Explicit, reasonable numbers with a reason behind each" },
+  { key: "math", label: "Math", short: "Math", weight: 0.15, desc: "Correct arithmetic and consistent units" },
+  { key: "sanity", label: "Sanity check", short: "Sanity", weight: 0.15, desc: "Cross-checks the answer against a real-world anchor" },
+  { key: "communication", label: "Communication", short: "Clarity", weight: 0.15, desc: "Easy to follow, with a clearly stated final answer" },
+];
+const TARGET_MINUTES = { Easy: 5, Medium: 8, Hard: 12 };
+const GOALS = ["Consulting interviews", "Product & tech interviews", "College admissions", "General practice"];
+const LEVELS = ["New to guesstimates", "Some practice", "Interview-ready"];
+
+function overallFromScores(scores) {
+  return Math.round(RUBRIC.reduce((s, r) => s + clamp(Number(scores[r.key]) || 0, 0, 10) * r.weight, 0) * 10);
+}
+function scoreTone(v) { if (v === null || v === undefined) return C.textMid; if (v >= 75) return C.green; if (v >= 55) return C.goldDeep; return C.red; }
+function scoreBand(v) { return v >= 85 ? "Interview-ready" : v >= 70 ? "Solid" : v >= 55 ? "Getting there" : "Needs work"; }
+function fmtClock(sec) { const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }
+function questionById(id) { return QUESTIONS.find((q) => q.id === id); }
+function categoryByKey(k) { return CATEGORIES.find((c) => c.key === k) || { key: k, label: k }; }
+function localDayKey(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function uid() { return "a_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8); }
+
+function loadState() { try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+function saveState(s) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) { /* storage full or blocked — state stays in memory */ } }
+
+function gradedAttempts(attempts) { return attempts.filter((a) => a.status === "graded" && a.grade); }
+
+function computeStreak(attempts) {
+  const days = new Set(attempts.map((a) => localDayKey(new Date(a.createdAt))));
+  const cursor = new Date();
+  let streak = 0;
+  if (!days.has(localDayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  while (days.has(localDayKey(cursor))) { streak++; cursor.setDate(cursor.getDate() - 1); }
+  return streak;
+}
+
+/* Everything the dashboard, coach and grader read about the student's history.
+   attempts are stored newest first. */
+function computeStats(attempts) {
+  const graded = gradedAttempts(attempts);
+  const recent = graded.slice(0, 10);
+  const avgScore = recent.length ? Math.round(avg(recent.map((a) => a.grade.overall))) : null;
+  const best = graded.length ? Math.max(...graded.map((a) => a.grade.overall)) : null;
+  const rubricAvg = RUBRIC.map((r) => ({ ...r, value: recent.length ? round1(avg(recent.map((a) => a.grade.scores[r.key]))) : null }));
+  const ranked = recent.length >= 2 ? [...rubricAvg].sort((a, b) => a.value - b.value) : [];
+  const weakestDim = ranked.length ? ranked[0] : null;
+  const strongestDim = ranked.length ? ranked[ranked.length - 1] : null;
+  const catOf = (a) => (questionById(a.qid) || {}).cat;
+  const byCat = CATEGORIES.map((c) => {
+    const catGraded = graded.filter((a) => catOf(a) === c.key);
+    const tried = new Set(attempts.filter((a) => catOf(a) === c.key).map((a) => a.qid)).size;
+    const total = QUESTIONS.filter((q) => q.cat === c.key).length;
+    return { ...c, avg: catGraded.length ? Math.round(avg(catGraded.map((a) => a.grade.overall))) : null, tried, total, count: catGraded.length };
+  });
+  const bestByQ = {};
+  graded.forEach((a) => { bestByQ[a.qid] = Math.max(bestByQ[a.qid] === undefined ? -1 : bestByQ[a.qid], a.grade.overall); });
+  const win = graded.slice(0, 12).reverse();
+  const trend = win.map((a, i) => ({ avg: a.grade.overall / 10, week: "#" + (graded.length - win.length + i + 1) }));
+  const covered = new Set(attempts.map((a) => a.qid)).size;
+  const avgTimeSec = recent.length ? Math.round(avg(recent.map((a) => a.timeSec || 0))) : null;
+  return { graded, avgScore, best, rubricAvg, weakestDim, strongestDim, byCat, bestByQ, trend, covered, avgTimeSec, streak: computeStreak(attempts), total: attempts.length };
+}
+
+/* Deterministic "what next" — updates instantly after every attempt, no credits.
+   The AI insight card sits alongside it and refreshes whenever an answer is graded. */
+function recommendNext(attempts, stats, profile) {
+  const attemptedIds = new Set(attempts.map((a) => a.qid));
+  let difficulty = profile.level === "Interview-ready" ? "Hard" : profile.level === "Some practice" ? "Medium" : "Easy";
+  if (stats.avgScore !== null) difficulty = stats.avgScore >= 78 ? "Hard" : stats.avgScore >= 60 ? "Medium" : "Easy";
+  const cats = [...stats.byCat].sort((a, b) => {
+    if ((a.count === 0) !== (b.count === 0)) return a.count === 0 ? -1 : 1;
+    if (a.count === 0) return a.tried - b.tried;
+    return a.avg - b.avg;
+  });
+  const order = [difficulty, ...DIFFICULTIES.filter((d) => d !== difficulty)];
+  for (const cat of cats) {
+    const pool = QUESTIONS.filter((q) => q.cat === cat.key && !attemptedIds.has(q.id));
+    for (const d of order) {
+      const q = pool.find((x) => x.difficulty === d);
+      if (q) {
+        const why = cat.count === 0 ? "You haven't been graded on " + cat.label + " yet." : cat.label + " is your lowest-scoring category, averaging " + cat.avg + ".";
+        return { question: q, reason: why + (d === difficulty ? " Pitched at " + d.toLowerCase() + " to match your current level." : "") };
+      }
+    }
+  }
+  const retake = [...QUESTIONS].sort((a, b) => (stats.bestByQ[a.id] === undefined ? 101 : stats.bestByQ[a.id]) - (stats.bestByQ[b.id] === undefined ? 101 : stats.bestByQ[b.id]))[0];
+  return { question: retake, reason: "You've tried every question — this one has your lowest best score, so it's the best retake." };
+}
+
+function pickQuestion({ category, difficulty, questionId }, attempts) {
+  if (questionId) { const exact = questionById(String(questionId).toLowerCase()); if (exact) return exact; }
+  const attemptedIds = new Set(attempts.map((a) => a.qid));
+  const low = String(category || "").toLowerCase();
+  const cat = CATEGORIES.find((c) => low && (c.label.toLowerCase().includes(low) || low.includes(c.key) || low.includes(c.label.toLowerCase().split(" ")[0])));
+  const diff = DIFFICULTIES.find((d) => d.toLowerCase() === String(difficulty || "").toLowerCase());
+  let pool = QUESTIONS.filter((q) => (!cat || q.cat === cat.key) && (!diff || q.difficulty === diff));
+  if (!pool.length) pool = QUESTIONS.filter((q) => !cat || q.cat === cat.key);
+  return pool.find((q) => !attemptedIds.has(q.id)) || pool[0] || null;
+}
+
+/* ============================== BACKEND CALLS ==============================
+   Same /api/chat endpoint and credit rules as ScoreOS: 1 credit per turnId,
+   refunded server-side if the model fails. */
+function codedError(code, message) { const e = new Error(message || code); e.code = code; return e; }
+async function callChat(session, messages, turnId, tools) {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + (session ? session.access_token : "") },
+    body: JSON.stringify({ messages, tools: tools || [], turnId }),
+  });
+  if (res.status === 402) throw codedError("no_credits");
+  if (res.status === 429) throw codedError("rate_limited");
+  if (res.status === 401) throw codedError("auth", "Your session expired — sign in again.");
+  if (!res.ok) { const body = await res.text().catch(() => ""); throw codedError("backend", "Request failed (" + res.status + "). " + body.slice(0, 160)); }
+  return res.json();
+}
+function newTurnId() { return "t_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10); }
+
+function extractJson(text) {
+  if (!text) return null;
+  const s = text.indexOf("{"), e = text.lastIndexOf("}");
+  if (s < 0 || e <= s) return null;
+  try { return JSON.parse(text.slice(s, e + 1)); } catch (err) { return null; }
+}
+function normalizeGrade(raw) {
+  if (!raw || typeof raw !== "object" || !raw.scores || typeof raw.scores !== "object") return null;
+  const scores = {};
+  RUBRIC.forEach((r) => { scores[r.key] = clamp(Math.round(Number(raw.scores[r.key]) || 0), 0, 10); });
+  const str = (v) => (typeof v === "string" ? v.trim() : "");
+  const list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()).slice(0, 4) : str(v) ? [str(v)] : []);
+  return {
+    scores, overall: overallFromScores(scores), verdict: str(raw.verdict),
+    strengths: list(raw.strengths), improvements: list(raw.improvements),
+    modelApproach: str(raw.model_approach), mathIssues: str(raw.math_issues),
+    nextStep: str(raw.next_step), trendInsight: str(raw.trend_insight),
+  };
+}
+
+function buildGraderMessages({ attempt, question, profile, history }) {
+  const historyLines = history.length
+    ? history.map((a) => { const q = questionById(a.qid) || {}; return "- " + categoryByKey(q.cat).label + " (" + q.difficulty + "), overall " + a.grade.overall + ": " + RUBRIC.map((r) => r.short + " " + a.grade.scores[r.key]).join(", "); }).join("\n")
+    : "No earlier graded attempts.";
+  const system = [
+    "You are a demanding but fair interviewer grading a candidate's written guesstimate answer. The candidate is preparing for: " + (profile.goal || "general practice") + ". Their self-described level: " + (profile.level || "unknown") + ".",
+    "Grade the method far more than the final number — there is no single correct answer, but the path must be logical and the numbers defensible.",
+    "Score each dimension from 0 to 10 using these anchors: 0-3 missing or wrong, 4-6 partial, 7-8 solid, 9-10 interview-ready.",
+    RUBRIC.map((r) => "- " + r.key + ": " + r.desc).join("\n"),
+    "Rules: Recompute every calculation yourself and put any errors in math_issues. Only award sanity above 4 if the candidate explicitly checks the result against something real. A bare number with no reasoning, an off-topic answer, or an empty answer scores 0-2 on every dimension. Do not reward length for its own sake.",
+    "Write feedback directly to the candidate in plain sentences. No LaTeX, no markdown headers, no tables.",
+    "trend_insight: one or two sentences on a pattern across this attempt AND their earlier attempts listed below (a recurring weak dimension, improvement, or habit). If there are no earlier attempts, describe the single habit most worth building.",
+    "Respond with ONLY a JSON object, no text before or after, in exactly this shape:",
+    '{"scores":{"structure":0,"assumptions":0,"math":0,"sanity":0,"communication":0},"verdict":"one sentence overall judgement","strengths":["..."],"improvements":["..."],"model_approach":"3-5 sentence outline of a strong approach to this exact question","math_issues":"specific arithmetic or unit errors, or empty string","next_step":"one concrete thing to do on the next attempt","trend_insight":"..."}',
+  ].join("\n\n");
+  const user = [
+    "QUESTION: " + question.prompt,
+    "CATEGORY: " + categoryByKey(question.cat).label + " | DIFFICULTY: " + question.difficulty + " | TYPE: " + question.type,
+    "Reference drivers a strong answer usually covers (for you, not shown to the candidate): " + question.drivers.join("; "),
+    "Time taken: " + fmtClock(attempt.timeSec || 0) + " (target " + TARGET_MINUTES[question.difficulty] + " min). Hint used: " + (attempt.hintUsed ? "yes" : "no") + ".",
+    "EARLIER GRADED ATTEMPTS (most recent first):\n" + historyLines,
+    "CANDIDATE'S ANSWER:\n" + (attempt.response || "(empty)"),
+  ].join("\n\n");
+  return [{ role: "system", content: system }, { role: "user", content: user }];
+}
+
+/* One credit per grade. If the model returns malformed JSON, retry once with the
+   SAME turnId — the backend treats it as the same turn, so the retry is free. */
+async function gradeWithAI({ session, attempt, question, profile, history }) {
+  const turnId = newTurnId();
+  const messages = buildGraderMessages({ attempt, question, profile, history });
+  const first = await callChat(session, messages, turnId);
+  const text1 = (((first.choices || [])[0] || {}).message || {}).content || "";
+  let grade = normalizeGrade(extractJson(text1));
+  if (grade) return grade;
+  const retry = await callChat(session, messages.concat([{ role: "assistant", content: text1 || "(no content)" }, { role: "user", content: "That was not valid JSON. Reply again with only the JSON object in the exact shape requested." }]), turnId);
+  const text2 = (((retry.choices || [])[0] || {}).message || {}).content || "";
+  grade = normalizeGrade(extractJson(text2));
+  if (!grade) throw codedError("parse", "The grader returned an unreadable result.");
+  return grade;
+}
+
+/* ============================== COACH ============================== */
+const COACH_TOOL_SCHEMAS = [
+  {
+    name: "open_question",
+    description: "Offer the student a practice question to attempt now. Use when they ask to practice, want a question, or ask what to do next. Choose category and difficulty from their request, or from their weakest area if they don't say.",
+    parameters: {
+      type: "object",
+      properties: {
+        category: { type: "string", description: "One of: " + CATEGORIES.map((c) => c.label).join(", ") },
+        difficulty: { type: "string", description: "Easy, Medium, or Hard" },
+        questionId: { type: "string", description: "Optional exact question id such as q07, only if the student names one" },
+      },
+    },
+  },
+];
+const COACH_QUICK = ["What should I practice next?", "Why am I losing points?", "How do I structure a market-sizing question?", "Give me a good sanity-check habit", "Give me a medium question in my weakest category"];
+
+function buildCoachSystemPrompt({ profile, stats, attempts, recommendation }) {
+  const recent = stats.graded.slice(0, 4).map((a) => { const q = questionById(a.qid) || {}; return "- \"" + q.prompt + "\" scored " + a.grade.overall + " — " + (a.grade.verdict || ""); }).join("\n") || "none yet";
+  const cats = stats.byCat.filter((c) => c.count > 0).map((c) => c.label + " " + c.avg).join(", ") || "no graded categories yet";
+  return [
+    "You are the built-in coach inside EstimateOS, a guesstimate practice app for candidates preparing for " + (profile.goal || "interviews") + ".",
+    "Help with how to structure guesstimates, choose and justify assumptions, do quick mental math, sanity-check answers, and present them in interviews. Use the student's data below to make advice specific.",
+    "Be concise, honest and encouraging. When the student wants to practice, call open_question so they get a button to start it.",
+    "FORMATTING: this renders in a small chat bubble. Plain conversational sentences and short paragraphs. No markdown headers or tables. A short dash list only when comparing 2-4 items. No LaTeX — write math plainly, like 1.4 billion × 30% = 420 million.",
+    "",
+    "STUDENT SNAPSHOT",
+    "Name: " + (profile.name || "not given") + ". Level: " + (profile.level || "unknown") + ".",
+    "Attempts: " + stats.total + " (" + stats.graded.length + " graded). Questions tried: " + stats.covered + " of " + QUESTIONS.length + ".",
+    "Average score (last 10 graded): " + (stats.avgScore === null ? "none yet" : stats.avgScore + "/100") + ". Best: " + (stats.best === null ? "none" : stats.best) + ". Streak: " + stats.streak + " day(s).",
+    "Rubric averages (0-10): " + (stats.graded.length ? stats.rubricAvg.map((r) => r.label + " " + r.value).join(", ") : "no data"),
+    "Weakest habit: " + (stats.weakestDim ? stats.weakestDim.label + " (" + stats.weakestDim.value + ")" : "not enough data"),
+    "Category averages: " + cats,
+    "Recent graded answers:\n" + recent,
+    "Recommended next question: " + (recommendation && recommendation.question ? recommendation.question.id + " — " + recommendation.question.prompt : "none"),
+  ].join("\n");
+}
+
+/* ============================== GAMIFICATION ==============================
+   Everything here is derived from saved attempts, so XP, levels, quests and
+   badges need no extra storage and can never drift out of sync with History. */
+const HAND = "'Caveat', 'Segoe Print', 'Bradley Hand', cursive";
+const LEVEL_TITLES = ["Napkin Scribbler", "Ballpark Rookie", "Order-of-Magnitude Apprentice", "Fermi Cadet", "Assumption Architect", "Sanity Checker", "Market Sizer", "Back-of-Envelope Pro", "Fermi Master", "Estimation Legend"];
+const QUEST_XP = 25, ALL_QUESTS_BONUS = 25;
+
+function levelStart(level) { return 50 * (level - 1) * level; }
+function levelInfo(xp) {
+  let level = 1;
+  while (xp >= levelStart(level + 1)) level++;
+  const start = levelStart(level), next = levelStart(level + 1);
+  return { level, title: LEVEL_TITLES[Math.min(level - 1, LEVEL_TITLES.length - 1)], xp, start, next, toNext: next - xp, pct: Math.round(((xp - start) / (next - start)) * 100) };
+}
+function chronological(attempts) { return [...attempts].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); }
+function isGraded(a) { return a.status === "graded" && !!a.grade; }
+function bestBefore(prior, qid) {
+  let b = null;
+  prior.forEach((p) => { if (p.qid === qid && isGraded(p)) b = b === null ? p.grade.overall : Math.max(b, p.grade.overall); });
+  return b;
+}
+function withinTarget(a) { const q = questionById(a.qid); return !!q && (a.timeSec || 0) <= TARGET_MINUTES[q.difficulty] * 60; }
+
+function xpItemsForAttempt(a, prior) {
+  const items = [{ key: "submit", label: "Answer submitted", xp: 5 }];
+  if (!prior.some((p) => p.qid === a.qid)) items.push({ key: "new", label: "First try at this question", xp: 20 });
+  if (isGraded(a)) {
+    const g = a.grade;
+    items.push({ key: "score", label: "Scored " + g.overall, xp: g.overall });
+    const pb = bestBefore(prior, a.qid);
+    if (pb !== null && g.overall > pb) items.push({ key: "beat", label: "Beat your best of " + pb, xp: 15 });
+    if (g.scores.sanity >= 7) items.push({ key: "sanity", label: "Checked your answer against reality", xp: 10 });
+    if (withinTarget(a) && g.overall >= 60) items.push({ key: "clock", label: "Finished inside the target time", xp: 10 });
+  }
+  return items;
+}
+
+/* Daily quests: three per day, picked deterministically from the date so they're
+   the same on every device and reload. */
+const QUEST_POOL = [
+  { id: "grade1", label: "Get one answer graded", test: (d) => d.graded.length >= 1, progress: (d) => [Math.min(d.graded.length, 1), 1] },
+  { id: "grade3", label: "Get three answers graded", test: (d) => d.graded.length >= 3, progress: (d) => [Math.min(d.graded.length, 3), 3] },
+  { id: "sanity", label: "Score 7 or more on sanity check", test: (d) => d.graded.some((a) => a.grade.scores.sanity >= 7) },
+  { id: "structure", label: "Score 8 or more on structure", test: (d) => d.graded.some((a) => a.grade.scores.structure >= 8) },
+  { id: "seventy", label: "Score 70 or higher on any answer", test: (d) => d.graded.some((a) => a.grade.overall >= 70) },
+  { id: "hard", label: "Answer a hard question", test: (d) => d.all.some((a) => (questionById(a.qid) || {}).difficulty === "Hard") },
+  { id: "clock", label: "Finish an answer inside the target time", test: (d) => d.all.some(withinTarget) },
+  { id: "newcat", label: "Try a category you haven't touched", test: (d) => d.all.some((a) => { const c = (questionById(a.qid) || {}).cat; return !d.prior.some((p) => (questionById(p.qid) || {}).cat === c); }) },
+  { id: "beat", label: "Beat your best score on any question", test: (d) => d.graded.some((a) => { const pb = bestBefore(d.before(a), a.qid); return pb !== null && a.grade.overall > pb; }) },
+  { id: "nohint", label: "Score 60 or more without the hint", test: (d) => d.graded.some((a) => !a.hintUsed && a.grade.overall >= 60) },
+];
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function questsForDay(dayKey) {
+  const h = hashStr(dayKey);
+  const first = h % 3 === 0 ? QUEST_POOL[1] : QUEST_POOL[0];
+  const rest = QUEST_POOL.slice(2);
+  const a = rest[h % rest.length];
+  let b = rest[Math.floor(h / 11) % rest.length];
+  if (b === a) b = rest[(rest.indexOf(a) + 3) % rest.length];
+  return [first, a, b];
+}
+function evalDay(dayKey, chron) {
+  const all = chron.filter((a) => localDayKey(new Date(a.createdAt)) === dayKey);
+  const firstIdx = chron.indexOf(all[0]);
+  const d = { all, graded: all.filter(isGraded), prior: firstIdx < 0 ? chron : chron.slice(0, firstIdx), before: (a) => chron.slice(0, chron.indexOf(a)) };
+  return questsForDay(dayKey).map((q) => ({ id: q.id, label: q.label, done: !!q.test(d), progress: q.progress ? q.progress(d) : null }));
+}
+function maxStreak(dayKeys) {
+  const sorted = [...dayKeys].sort();
+  let best = 0, run = 0, prev = null;
+  sorted.forEach((k) => {
+    const t = new Date(k + "T00:00:00").getTime();
+    run = prev !== null && Math.round((t - prev) / 86400000) === 1 ? run + 1 : 1;
+    best = Math.max(best, run); prev = t;
+  });
+  return best;
+}
+
+/* Badges are stamps — `mark` is what's written inside the red-pen circle. */
+const BADGES = [
+  { id: "first", mark: "1st", label: "First estimate", desc: "Submit your first answer", test: (s) => s.chron.length >= 1 },
+  { id: "graded", mark: "A+", label: "On the record", desc: "Get your first answer graded", test: (s) => s.graded.length >= 1 },
+  { id: "seventy", mark: "70", label: "Solid ground", desc: "Score 70 or higher", test: (s) => s.graded.some((a) => a.grade.overall >= 70) },
+  { id: "ready", mark: "85", label: "Interview-ready", desc: "Score 85 or higher", test: (s) => s.graded.some((a) => a.grade.overall >= 85) },
+  { id: "sanity", mark: "✓", label: "Sanity saint", desc: "Score 9 or more on sanity check", test: (s) => s.graded.some((a) => a.grade.scores.sanity >= 9) },
+  { id: "tree", mark: "tree", label: "Tree surgeon", desc: "Score 9 or more on structure", test: (s) => s.graded.some((a) => a.grade.scores.structure >= 9) },
+  { id: "math", mark: "10", label: "Calculator brain", desc: "Get a perfect 10 on math", test: (s) => s.graded.some((a) => a.grade.scores.math === 10) },
+  { id: "hard", mark: "hard", label: "Hard hitter", desc: "Score 75+ on a hard question", test: (s) => s.graded.some((a) => (questionById(a.qid) || {}).difficulty === "Hard" && a.grade.overall >= 75) },
+  { id: "speed", mark: "fast", label: "Beat the clock", desc: "Score 70+ in half the target time", test: (s) => s.graded.some((a) => { const q = questionById(a.qid); return q && a.grade.overall >= 70 && (a.timeSec || 0) <= TARGET_MINUTES[q.difficulty] * 30; }) },
+  { id: "comeback", mark: "+20", label: "Comeback", desc: "Improve a question's best by 20+", test: (s) => s.graded.some((a) => { const pb = bestBefore(s.before(a), a.qid); return pb !== null && a.grade.overall - pb >= 20; }) },
+  { id: "five", mark: "5×", label: "Five in a day", desc: "Get five answers graded in one day", test: (s) => { const c = {}; s.graded.forEach((a) => { const k = localDayKey(new Date(a.createdAt)); c[k] = (c[k] || 0) + 1; }); return Object.values(c).some((n) => n >= 5); } },
+  { id: "streak3", mark: "3d", label: "Warming up", desc: "Practice three days in a row", test: (s) => s.maxStreak >= 3 },
+  { id: "streak7", mark: "7d", label: "Habit formed", desc: "Practice seven days in a row", test: (s) => s.maxStreak >= 7 },
+  { id: "explorer", mark: "all", label: "Explorer", desc: "Try every category", test: (s) => s.cats >= CATEGORIES.length },
+  { id: "bank", mark: "50", label: "Full bank", desc: "Try all 50 questions", test: (s) => s.covered >= QUESTIONS.length },
+];
+
+function computeGame(attempts) {
+  const chron = chronological(attempts);
+  let xp = 0;
+  chron.forEach((a, i) => { xp += xpItemsForAttempt(a, chron.slice(0, i)).reduce((sum, x) => sum + x.xp, 0); });
+  const days = [...new Set(chron.map((a) => localDayKey(new Date(a.createdAt))))];
+  days.forEach((dk) => { const n = evalDay(dk, chron).filter((q) => q.done).length; xp += n * QUEST_XP + (n === 3 ? ALL_QUESTS_BONUS : 0); });
+  const graded = chron.filter(isGraded);
+  const s = { chron, graded, maxStreak: maxStreak(days), covered: new Set(chron.map((a) => a.qid)).size, cats: new Set(chron.map((a) => (questionById(a.qid) || {}).cat)).size, before: (a) => chron.slice(0, chron.indexOf(a)) };
+  const badges = BADGES.map((b) => ({ id: b.id, mark: b.mark, label: b.label, desc: b.desc, earned: !!b.test(s) }));
+  return { xp, level: levelInfo(xp), todayQuests: evalDay(localDayKey(new Date()), chron), badges };
+}
+
+/* What changed between two snapshots — drives the reward list, toasts and confetti. */
+function rewardDiff(before, after, attempt, afterAttempts, includeSubmit) {
+  const chron = chronological(afterAttempts);
+  const idx = chron.findIndex((a) => a.id === attempt.id);
+  let items = xpItemsForAttempt(chron[idx], chron.slice(0, idx));
+  if (!includeSubmit) items = items.filter((x) => x.key !== "submit" && x.key !== "new");
+  after.todayQuests.forEach((q, i) => { if (q.done && !(before.todayQuests[i] || {}).done) items.push({ key: "quest-" + q.id, label: "Quest done: " + q.label.toLowerCase(), xp: QUEST_XP }); });
+  const allNow = after.todayQuests.every((q) => q.done), allBefore = before.todayQuests.every((q) => q.done);
+  if (allNow && !allBefore) items.push({ key: "allquests", label: "All three of today's quests", xp: ALL_QUESTS_BONUS });
+  const newBadges = after.badges.filter((b, i) => b.earned && !before.badges[i].earned);
+  return {
+    items, newBadges, total: after.xp - before.xp,
+    levelUp: after.level.level > before.level.level ? after.level : null,
+    beatBest: items.some((x) => x.key === "beat"), allQuests: allNow && !allBefore,
+  };
+}
+
+function prefersReducedMotion() { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+/* Confetti (Magic UI's Confetti wraps canvas-confetti; same library, loaded from a CDN). */
+function celebrate(size) {
+  if (!window.confetti || prefersReducedMotion()) return;
+  const colors = ["#1B2A6B", "#D63A2F", "#FFD84D", "#178A4C", "#FFFFFF"];
+  if (size === "big") {
+    window.confetti({ particleCount: 120, spread: 75, startVelocity: 42, origin: { y: 0.62 }, colors });
+    setTimeout(() => {
+      window.confetti({ particleCount: 70, angle: 60, spread: 58, origin: { x: 0, y: 0.75 }, colors });
+      window.confetti({ particleCount: 70, angle: 120, spread: 58, origin: { x: 1, y: 0.75 }, colors });
+    }, 220);
+  } else {
+    window.confetti({ particleCount: 60, spread: 55, startVelocity: 34, origin: { y: 0.68 }, colors });
+  }
+}
+
+/* ============================== ICONS ADDED FOR THE GAME LAYER ============================== */
+Object.assign(Icons, {
+  Flame: (p) => <Ic {...p}><path d="M12 3c1.2 3.6 5.5 5.6 5.5 10.2a5.5 5.5 0 0 1-11 0c0-2.4 1.3-3.9 2.6-5 .2 1.8 1.1 2.8 2.3 3.3C11 9 10.9 6.2 12 3z" /></Ic>,
+  Check: (p) => <Ic {...p}><polyline points="5 12.5 10 17 19 7" /></Ic>,
+  Trophy: (p) => <Ic {...p}><path d="M8 4h8v5a4 4 0 0 1-8 0V4z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4" /><line x1="12" y1="13" x2="12" y2="17" /><path d="M8.5 20h7" /></Ic>,
+});
+
+/* ============================== PORTED ANIMATED COMPONENTS ==============================
+   Adapted from Magic UI / React Bits for a no-build, no-Tailwind page: same effect,
+   plain React + CSS. Motion only plays in response to something the user did. */
+
+// Magic UI ShimmerButton — a light sweep across the main call to action.
+function ShimmerButton({ children, onClick, style }) {
+  return <button className="shimmer-btn press" onClick={onClick} style={{ position: "relative", overflow: "hidden", background: C.gold, color: C.navy, border: "none", borderRadius: 12, padding: "11px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: FONT, ...style }}><span style={{ position: "relative", zIndex: 1 }}>{children}</span></button>;
+}
+// Magic UI AnimatedCircularProgressBar — ring that animates to its new value.
+function ProgressRing({ value, size = 96, stroke = 8, color = C.navy, track = C.panelAlt, children }) {
+  const r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={track} strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - clamp(value, 0, 100) / 100)} style={{ transition: "stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>{children}</div>
+    </div>
+  );
+}
+// Magic UI / React Bits AnimatedList — items arrive one after another.
+function AnimatedList({ items, render, stagger = 160 }) {
+  return <div>{items.map((it, i) => <div key={it.key || i} className="list-pop" style={{ animationDelay: (i * stagger) + "ms" }}>{render(it, i)}</div>)}</div>;
+}
+
+/* ============================== SMALL PIECES ============================== */
+function Chip({ active, onClick, children }) {
+  return <button className="press" onClick={onClick} aria-pressed={!!active} style={{ padding: "7px 13px", borderRadius: 999, border: "1px solid " + (active ? C.navy : C.border), background: active ? C.navy : C.panel, color: active ? "#fff" : C.text, fontSize: 12.5, fontWeight: active ? 600 : 500, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }}>{children}</button>;
+}
+function DifficultyTag({ d }) {
+  const tone = d === "Hard" ? { bg: C.redSoft, fg: C.red } : d === "Medium" ? { bg: C.goldSoft, fg: C.goldDeep } : { bg: C.greenSoft, fg: C.green };
+  return <span style={{ fontSize: 11, fontWeight: 650, padding: "2px 8px", borderRadius: 999, background: tone.bg, color: tone.fg, whiteSpace: "nowrap" }}>{d}</span>;
+}
+function Logo({ size = 16 }) {
+  return <span style={{ fontSize: size, fontWeight: 700, letterSpacing: -0.3, color: C.navy, fontFamily: FONT }}>Estimate<span style={{ fontFamily: HAND, color: C.red, fontSize: size * 1.35, fontWeight: 700, marginLeft: 1 }}>OS</span></span>;
+}
+function H1({ children, style }) { return <h1 style={{ margin: 0, fontSize: 30, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1.15, color: C.text, ...style }}>{children}</h1>; }
+function Lede({ children, style }) { return <p style={{ margin: "8px 0 0", fontSize: 14, color: C.textMid, lineHeight: 1.55, maxWidth: 640, ...style }}>{children}</p>; }
+function SectionHead({ children, right }) {
+  return <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 12 }}><h2 style={{ margin: 0, fontSize: 15, fontWeight: 650, color: C.text }}>{children}</h2>{right}</div>;
+}
+function XPBar({ level, height = 8, showLabel = true }) {
+  return (
+    <div>
+      <div style={{ height, background: C.panelAlt, borderRadius: 99, overflow: "hidden" }} role="progressbar" aria-valuenow={level.pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progress to next level">
+        <div style={{ width: level.pct + "%", height: "100%", background: "linear-gradient(90deg, " + C.gold + ", #FFB800)", borderRadius: 99, transition: "width 1s cubic-bezier(.22,1,.36,1)" }} />
+      </div>
+      {showLabel && <div style={{ fontSize: 11.5, color: C.textMid, marginTop: 5 }}><AnimatedNumber value={level.toNext} /> XP to level {level.level + 1}</div>}
+    </div>
+  );
+}
+
+/* The one bold element: the score is marked by hand in red pen, circled. */
+function RedPenScore({ value }) {
+  return (
+    <div style={{ width: 180, flexShrink: 0, textAlign: "center" }}>
+      <div style={{ position: "relative", width: 180, height: 128 }}>
+        <svg viewBox="0 0 180 128" width="180" height="128" style={{ position: "absolute", inset: 0, overflow: "visible" }} aria-hidden="true">
+          <path className="pen-draw" d="M44 20 C 98 2, 168 18, 166 64 C 164 110, 80 124, 34 102 C 0 84, 8 32, 70 16" fill="none" stroke={C.red} strokeWidth="3.4" strokeLinecap="round" />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: HAND, color: C.red, lineHeight: 1 }} aria-label={"Score " + value + " out of 100"}>
+          <span style={{ fontSize: 64, fontWeight: 700 }}><AnimatedNumber value={value} /></span>
+          <span style={{ fontSize: 26, fontWeight: 600, marginLeft: 3, marginTop: 18 }}>/100</span>
+        </div>
+      </div>
+      <div className="stamp-in" style={{ fontFamily: HAND, fontSize: 25, color: C.red, transform: "rotate(-4deg)", marginTop: 2 }}>{scoreBand(value)}</div>
+    </div>
+  );
+}
+function RubricBars({ scores }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+      {RUBRIC.map((r) => {
+        const v = scores[r.key];
+        return (
+          <div key={r.key} title={r.desc} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5 }}>
+            <span style={{ color: C.textMid, width: 104, flexShrink: 0 }}>{r.label}</span>
+            <div style={{ flex: 1, height: 7, background: C.panelAlt, borderRadius: 99, overflow: "hidden" }}><div style={{ width: (v * 10) + "%", height: "100%", borderRadius: 99, background: v >= 7 ? C.navy : v >= 5 ? "#E8B400" : C.red, transition: "width .8s cubic-bezier(.22,1,.36,1)" }} /></div>
+            <span style={{ width: 40, flexShrink: 0, textAlign: "right", fontWeight: 650, fontVariantNumeric: "tabular-nums" }}>{v}/10</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function RewardFeed({ reward }) {
+  if (!reward || (!reward.items.length && !reward.newBadges.length)) return null;
+  const rows = [...reward.items.map((x) => ({ ...x, kind: "xp" })), ...reward.newBadges.map((b) => ({ key: "badge-" + b.id, kind: "badge", label: "Badge earned: " + b.label, mark: b.mark }))];
+  if (reward.levelUp) rows.push({ key: "level", kind: "level", label: "Level " + reward.levelUp.level + ": " + reward.levelUp.title });
+  return (
+    <div style={{ marginTop: 18, background: C.goldSoft, border: "1px solid #F2DD8C", borderRadius: 14, padding: "14px 16px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 650 }}>What you earned</span>
+        <span style={{ fontFamily: HAND, fontSize: 30, color: C.navy, lineHeight: 1 }}>+<AnimatedNumber value={reward.total} duration={1100} /> XP</span>
+      </div>
+      <AnimatedList items={rows} render={(x) => (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderTop: "1px dashed #E9D27A", fontSize: 13 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, color: x.kind === "level" ? C.navy : C.text, fontWeight: x.kind === "xp" ? 450 : 650 }}>
+            {x.kind === "badge" ? <span style={{ fontFamily: HAND, color: C.red, fontSize: 17 }}>{x.mark}</span> : x.kind === "level" ? <Icons.Trophy size={14} color={C.navy} /> : <Icons.Check size={13} color={C.green} />}
+            {x.label}
+          </span>
+          {x.kind === "xp" && <span style={{ fontWeight: 650, fontVariantNumeric: "tabular-nums", color: C.goldDeep }}>+{x.xp}</span>}
+        </div>
+      )} />
+    </div>
+  );
+}
+function GameToast({ toast, onDone }) {
+  useEffect(() => { if (!toast) return; const t = setTimeout(onDone, toast.kind === "level" ? 4200 : 3200); return () => clearTimeout(t); }, [toast]);
+  if (!toast) return null;
+  const level = toast.kind === "level";
+  return (
+    <div className="toast-in" role="status" style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 300, display: "flex", alignItems: "center", gap: 12, background: level ? C.navy : C.panel, color: level ? "#fff" : C.text, border: "1px solid " + (level ? C.navy : C.border), padding: "12px 18px", borderRadius: 14, boxShadow: "0 14px 34px rgba(27,42,107,.22)", maxWidth: "calc(100vw - 32px)" }}>
+      <span style={{ fontFamily: HAND, fontSize: level ? 30 : 24, color: level ? C.gold : C.red, lineHeight: 1 }}>{toast.mark}</span>
+      <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>{toast.title}</div>{toast.desc && <div style={{ fontSize: 12.5, opacity: .8, marginTop: 1 }}>{toast.desc}</div>}</div>
+    </div>
+  );
+}
+
+/* ============================== NAVIGATION ============================== */
+const NAV_ITEMS = [
+  { key: "dashboard", label: "Home", icon: Icons.Dashboard },
+  { key: "practice", label: "Practice", icon: Icons.Target },
+  { key: "history", label: "History", icon: Icons.Chart },
+  { key: "coach", label: "Coach", icon: Icons.Sparkles },
+];
+function NavButton({ item, active, onClick, large }) {
+  const Icon = item.icon, isActive = active === item.key;
+  return (
+    <button onClick={onClick} aria-current={isActive ? "page" : undefined} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: large ? "11px 12px" : "9px 12px", marginBottom: 2, borderRadius: 10, border: "none", cursor: "pointer", textAlign: "left", background: isActive ? C.paleBlue : "transparent", color: isActive ? C.navy : navInactive, fontSize: large ? 14.5 : 13.5, fontWeight: isActive ? 650 : 500, fontFamily: FONT }}>
+      <Icon size={large ? 17 : 16} />{item.label}
+    </button>
+  );
+}
+function LevelMini({ game }) {
+  return (
+    <div style={{ padding: "12px 12px 14px", borderRadius: 12, background: C.panelAlt }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 7 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 650, color: C.navy }}>Level {game.level.level}</span>
+        <span style={{ fontSize: 11.5, color: C.textMid, fontVariantNumeric: "tabular-nums" }}>{game.level.xp} XP</span>
+      </div>
+      <div style={{ fontSize: 12, color: C.textMid, marginBottom: 8 }}>{game.level.title}</div>
+      <XPBar level={game.level} height={6} showLabel={false} />
+    </div>
+  );
+}
+function Sidebar({ active, setActive, game }) {
+  return (
+    <div className="caseos-sidebar" style={{ width: 224, minWidth: 224, height: "100%", display: "flex", flexDirection: "column", background: C.panel, borderRight: "1px solid " + C.border }}>
+      <div style={{ padding: "20px 22px 18px" }}><Logo size={17} /></div>
+      <nav style={{ padding: "4px 12px", flex: 1 }}>{NAV_ITEMS.map((item) => <NavButton key={item.key} item={item} active={active} onClick={() => setActive(item.key)} />)}</nav>
+      <div style={{ padding: 12 }}>
+        <LevelMini game={game} />
+        <div style={{ marginTop: 8 }}><NavButton item={{ key: "settings", label: "Profile & settings", icon: Icons.Settings }} active={active} onClick={() => setActive("settings")} /></div>
+      </div>
+    </div>
+  );
+}
+function MobileNavDrawer({ open, onClose, active, setActive, game }) {
+  if (!open) return null;
+  const go = (k) => { setActive(k); onClose(); };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,26,46,.38)", zIndex: 200, display: "flex" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 256, maxWidth: "82vw", height: "100%", background: C.panel, padding: "18px 12px", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        <div style={{ padding: "0 10px 20px" }}><Logo size={17} /></div>
+        {NAV_ITEMS.map((item) => <NavButton key={item.key} item={item} active={active} large onClick={() => go(item.key)} />)}
+        <div style={{ marginTop: "auto", paddingTop: 12 }}><LevelMini game={game} /><div style={{ marginTop: 8 }}><NavButton item={{ key: "settings", label: "Profile & settings", icon: Icons.Settings }} active={active} large onClick={() => go("settings")} /></div></div>
+      </div>
+    </div>
+  );
+}
+function Topbar({ userName, game, streak, viewLabel, setMobileNavOpen, session, credits, onOpenAccount }) {
+  const initials = (userName || "?").trim().split(" ").filter(Boolean).slice(0, 2).map((n) => n[0].toUpperCase()).join("") || "?";
+  const pillBtn = { display: "flex", alignItems: "center", gap: 6, background: C.navy, color: "#fff", border: "none", borderRadius: 999, padding: "6px 13px", fontSize: 12.5, fontWeight: 650, cursor: "pointer", fontFamily: FONT, flexShrink: 0, whiteSpace: "nowrap" };
+  return (
+    <div className="app-topbar" style={{ height: 58, minHeight: 58, background: C.panel, borderBottom: "1px solid " + C.border, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+        <button className="mobile-menu-btn" aria-label="Open menu" onClick={() => setMobileNavOpen((v) => !v)} style={{ display: "none", background: "none", border: "1px solid " + C.border, borderRadius: 8, width: 32, height: 32, minWidth: 32, color: C.text, cursor: "pointer", alignItems: "center", justifyContent: "center" }}><Icons.Menu size={16} /></button>
+        <div className="topbar-view-label" style={{ fontSize: 14.5, fontWeight: 650, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{viewLabel}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <div className="topbar-level" style={{ display: "flex", alignItems: "center", gap: 8 }} title={game.level.title}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.navy, background: C.paleBlue, borderRadius: 999, padding: "4px 9px" }}>Lv {game.level.level}</span>
+          <div className="topbar-xp" style={{ width: 74 }}><XPBar level={game.level} height={6} showLabel={false} /></div>
+        </div>
+        <span title={streak + "-day streak"} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 13, fontWeight: 700, color: streak ? "#E2541B" : C.textDim }}><Icons.Flame size={15} color={streak ? "#E2541B" : C.textDim} />{streak}</span>
+        {session
+          ? <button className="press" onClick={onOpenAccount} style={pillBtn}>{credits === null ? "…" : credits}<span className="readiness-pill-label">credits</span></button>
+          : <button className="press" onClick={onOpenAccount} style={pillBtn}>Sign in</button>}
+        <div className="topbar-avatar" style={{ width: 32, height: 32, minWidth: 32, borderRadius: 999, background: C.navy, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, color: "#fff" }}>{initials}</div>
+      </div>
+    </div>
+  );
+}
+function AccountModal({ open, onClose, session, credits, onSendLink, onSignOut, onBuyPack }) {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState("");
+  const [sending, setSending] = useState(false);
+  const [buyStatus, setBuyStatus] = useState("");
+  const send = async () => { if (!email.trim() || sending) return; setSending(true); setStatus("Sending…"); const r = await onSendLink(email.trim()); setStatus(r.message); setSending(false); };
+  const buy = async (pack) => { setBuyStatus("Opening checkout…"); const r = await onBuyPack(pack); if (r && !r.ok) setBuyStatus(r.message); };
+  return (
+    <Modal open={open} onClose={onClose} title="Account" width={420}>
+      {!session ? (
+        <div>
+          <p style={{ margin: "0 0 14px", fontSize: 13.5, color: C.textMid, lineHeight: 1.55 }}>Sign in to get answers graded and use the coach. New accounts get 20 free credits. We'll email you a sign-in link, so there's no password.</p>
+          <FieldLabel>Email</FieldLabel>
+          <div style={{ display: "flex", gap: 8 }}>
+            <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="you@example.com" style={{ flex: 1 }} />
+            <PrimaryButton onClick={send} style={{ opacity: sending ? 0.7 : 1 }}>Send link</PrimaryButton>
+          </div>
+          {status && <div style={{ marginTop: 10, fontSize: 12.5, color: C.textMid }}>{status}</div>}
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10 }}>
+            <div><div style={{ fontSize: 13.5, fontWeight: 650 }}>{session.user.email}</div><div style={{ fontSize: 12.5, color: C.textMid, marginTop: 2 }}>{credits === null ? "…" : credits} credits left. A grade or a coach message uses one.</div></div>
+            <GhostButton onClick={onSignOut} style={{ padding: "6px 12px", fontSize: 12 }}>Sign out</GhostButton>
+          </div>
+          <FieldLabel>Buy more credits</FieldLabel>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <GhostButton onClick={() => buy("starter")} style={{ flex: 1, justifyContent: "center" }}>100 for $2.99</GhostButton>
+            <GhostButton onClick={() => buy("value")} style={{ flex: 1, justifyContent: "center" }}>300 for $6.99</GhostButton>
+            <GhostButton onClick={() => buy("power")} style={{ flex: 1, justifyContent: "center" }}>1000 for $19.99</GhostButton>
+          </div>
+          {buyStatus && <div style={{ marginTop: 10, fontSize: 12.5, color: C.textMid }}>{buyStatus}</div>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ============================== HOME ============================== */
+function LevelSheet({ game, streak }) {
+  const L = game.level;
+  return (
+    <div className="sheet" style={{ padding: 22, display: "flex", gap: 20, alignItems: "center" }}>
+      <ProgressRing value={L.pct} size={104} stroke={9} color={C.navy}>
+        <span style={{ fontSize: 11, color: C.textMid }}>Level</span>
+        <span style={{ fontSize: 32, fontWeight: 750, color: C.navy, lineHeight: 1, letterSpacing: -1 }}><AnimatedNumber value={L.level} /></span>
+      </ProgressRing>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: HAND, fontSize: 28, color: C.red, lineHeight: 1.05 }}>{L.title}</div>
+        <div style={{ fontSize: 13, color: C.textMid, margin: "6px 0 10px" }}><strong style={{ color: C.text }}><AnimatedNumber value={L.xp} /></strong> XP total</div>
+        <XPBar level={L} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 13, color: streak ? C.text : C.textMid }}>
+          <Icons.Flame size={16} color={streak ? "#E2541B" : C.textDim} />
+          {streak ? <span><strong>{streak}-day streak.</strong> Answer one today to keep it.</span> : <span>Answer one today to start a streak.</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+function QuestBoard({ quests, onGo }) {
+  const done = quests.filter((q) => q.done).length;
+  const all = done === quests.length;
+  return (
+    <div className={"sheet" + (all ? "" : " border-beam")} style={{ padding: 22 }}>
+      <SectionHead right={<span style={{ fontSize: 12.5, color: C.textMid, fontVariantNumeric: "tabular-nums" }}>{done} of {quests.length}</span>}>Today's quests</SectionHead>
+      <div>
+        {quests.map((q) => (
+          <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", borderTop: "1px solid " + C.borderSoft }}>
+            <span className={q.done ? "check-pop" : ""} style={{ width: 22, height: 22, minWidth: 22, borderRadius: 999, border: "2px solid " + (q.done ? C.green : C.border), background: q.done ? C.green : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{q.done && <Icons.Check size={13} color="#fff" />}</span>
+            <span style={{ flex: 1, fontSize: 13.5, color: q.done ? C.textMid : C.text, textDecoration: q.done ? "line-through" : "none", textDecorationColor: C.red }}>{q.label}{q.progress && !q.done ? <span style={{ color: C.textMid }}> ({q.progress[0]}/{q.progress[1]})</span> : null}</span>
+            <span style={{ fontSize: 12, fontWeight: 650, color: q.done ? C.green : C.goldDeep, whiteSpace: "nowrap" }}>+{QUEST_XP} XP</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 12.5, color: C.textMid }}>{all ? "All done. Bonus banked, new quests tomorrow." : "Finish all three for a +" + ALL_QUESTS_BONUS + " XP bonus."}</div>
+      {!all && <button onClick={onGo} style={{ marginTop: 10, background: "none", border: "none", padding: 0, color: C.navy, fontWeight: 650, fontSize: 13, cursor: "pointer", fontFamily: FONT }}>Go to practice</button>}
+    </div>
+  );
+}
+function BadgeShelf({ badges }) {
+  const earned = badges.filter((b) => b.earned).length;
+  return (
+    <div className="sheet" style={{ padding: 22 }}>
+      <SectionHead right={<span style={{ fontSize: 12.5, color: C.textMid }}>{earned} of {badges.length} earned</span>}>Badges</SectionHead>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))", gap: 14 }}>
+        {badges.map((b, i) => (
+          <div key={b.id} title={b.desc} style={{ textAlign: "center" }}>
+            <div style={{ width: 62, height: 62, margin: "0 auto 7px", borderRadius: 999, border: b.earned ? "2.5px solid " + C.red : "2px dashed " + C.border, display: "flex", alignItems: "center", justifyContent: "center", transform: b.earned ? "rotate(" + ((i % 3) * 5 - 5) + "deg)" : "none", background: b.earned ? "#FFF6F5" : "transparent" }}>
+              <span style={{ fontFamily: HAND, fontSize: b.mark.length > 3 ? 19 : 25, fontWeight: 700, color: b.earned ? C.red : C.textDim }}>{b.earned ? b.mark : "?"}</span>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: b.earned ? C.text : C.textMid }}>{b.label}</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, lineHeight: 1.35 }}>{b.desc}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function StatStrip({ stats }) {
+  const cells = [
+    ["Average score", stats.avgScore === null ? "–" : stats.avgScore, "last 10 graded"],
+    ["Best score", stats.best === null ? "–" : stats.best, stats.best === null ? "none graded yet" : scoreBand(stats.best).toLowerCase()],
+    ["Questions tried", stats.covered, "of " + QUESTIONS.length],
+    ["Average time", stats.avgTimeSec === null ? "–" : fmtClock(stats.avgTimeSec), "per answer"],
+  ];
+  return (
+    <div className="sheet eos-strip" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)" }}>
+      {cells.map(([label, value, sub], i) => (
+        <div key={label} style={{ padding: "16px 20px", borderLeft: i ? "1px solid " + C.borderSoft : "none" }}>
+          <div style={{ fontSize: 12.5, color: C.textMid }}>{label}</div>
+          <div style={{ fontSize: 26, fontWeight: 720, color: C.navy, marginTop: 4, letterSpacing: -.5, fontVariantNumeric: "tabular-nums" }}>{typeof value === "number" ? <AnimatedNumber value={value} /> : value}</div>
+          <div style={{ fontSize: 11.5, color: C.textDim, marginTop: 2 }}>{sub}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function DashboardView({ profile, stats, game, insight, recommendation, onStart, onOpenAttempt, setActive }) {
+  const h = new Date().getHours();
+  const greeting = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const q = recommendation.question;
+  return (
+    <div className="eos-page">
+      <div style={{ marginBottom: 22 }}>
+        <H1>{greeting}, {(profile.name || "there").split(" ")[0]}.</H1>
+        <Lede>{stats.total === 0 ? "Answer one question to start earning XP. Every answer gets marked like an interview would." : "You've tried " + stats.covered + " of " + QUESTIONS.length + " questions. Here's where to put your next ten minutes."}</Lede>
+      </div>
+
+      <div className="eos-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 16, marginBottom: 16 }}>
+        <LevelSheet game={game} streak={stats.streak} />
+        <QuestBoard quests={game.todayQuests} onGo={() => onStart(q.id)} />
+      </div>
+
+      <div className="next-up" style={{ background: C.navy, color: "#fff", borderRadius: 18, padding: "24px 26px", marginBottom: 16, display: "flex", gap: 24, alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 380px", minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", marginBottom: 8 }}>Your next question</div>
+          <div style={{ fontSize: 22, fontWeight: 650, lineHeight: 1.3, letterSpacing: -.3, maxWidth: 640 }}>{q.prompt}</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", marginTop: 10, lineHeight: 1.55, maxWidth: 600 }}>{recommendation.reason}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+          <ShimmerButton onClick={() => onStart(q.id)}>Start answering</ShimmerButton>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,.65)" }}>{q.difficulty}, about {TARGET_MINUTES[q.difficulty]} minutes</span>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}><StatStrip stats={stats} /></div>
+
+      <div className="eos-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div className="sheet" style={{ padding: 22 }}>
+          <div style={{ fontFamily: HAND, fontSize: 26, color: C.red, lineHeight: 1, marginBottom: 10 }}>Grader's notes</div>
+          {insight && insight.text ? (
+            <div>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{insight.text}</p>
+              {insight.nextStep && <p style={{ margin: "12px 0 0", fontSize: 13.5, lineHeight: 1.55, color: C.navy, background: C.paleBlue, borderRadius: 10, padding: "10px 12px" }}><strong>Next time:</strong> {insight.nextStep}</p>}
+              <div style={{ marginTop: 10, fontSize: 11.5, color: C.textDim }}>Written after your answer on {fmtDate(new Date(insight.updatedAt))}.</div>
+            </div>
+          ) : <p style={{ margin: 0, fontSize: 13.5, color: C.textMid, lineHeight: 1.6 }}>After each graded answer, the grader compares it with your earlier ones and notes the pattern here.</p>}
+        </div>
+        <div className="sheet" style={{ padding: 22 }}>
+          <SectionHead>Skill profile</SectionHead>
+          {stats.graded.length ? (
+            <div>
+              <RadarSVG data={stats.rubricAvg.map((r) => ({ skill: r.short, value: r.value }))} size={230} max={10} />
+              {stats.weakestDim && <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>Weakest habit: <strong>{stats.weakestDim.label.toLowerCase()}</strong>, averaging {stats.weakestDim.value} out of 10.</p>}
+            </div>
+          ) : <p style={{ margin: 0, fontSize: 13.5, color: C.textMid }}>Your five rubric scores appear after your first graded answer.</p>}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}><BadgeShelf badges={game.badges} /></div>
+
+      <div className="eos-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div className="sheet" style={{ padding: 22 }}>
+          <SectionHead>Score trend</SectionHead>
+          {stats.trend.length >= 2 ? <LineChartSVG data={stats.trend} height={200} max={10} /> : <p style={{ margin: 0, fontSize: 13.5, color: C.textMid }}>Grade two answers to see the line. Scores are shown out of 10.</p>}
+        </div>
+        <div className="sheet" style={{ padding: 22 }}>
+          <SectionHead>By category</SectionHead>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {stats.byCat.map((c) => (
+              <div key={c.key} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12.5 }}>
+                <span className="eos-cat-label" style={{ width: 150, flexShrink: 0 }}>{c.label}</span>
+                <div style={{ flex: 1, height: 6, background: C.panelAlt, borderRadius: 99, overflow: "hidden" }}><div style={{ width: (c.avg || 0) + "%", height: "100%", background: c.avg === null ? "transparent" : c.avg >= 70 ? C.navy : c.avg >= 55 ? "#E8B400" : C.red, borderRadius: 99 }} /></div>
+                <span style={{ width: 78, flexShrink: 0, textAlign: "right", color: c.avg === null ? C.textDim : C.text, fontVariantNumeric: "tabular-nums" }}>{c.avg === null ? c.tried + "/" + c.total + " tried" : c.avg + " avg"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="sheet" style={{ padding: 22 }}>
+        <SectionHead right={stats.total > 0 && <button onClick={() => setActive("history")} style={{ background: "none", border: "none", color: C.navy, fontSize: 13, cursor: "pointer", fontFamily: FONT, fontWeight: 650 }}>See all</button>}>Recent answers</SectionHead>
+        {stats.total === 0 ? <p style={{ margin: 0, fontSize: 13.5, color: C.textMid }}>Nothing yet. Your next question is waiting above.</p> : <RecentList attempts={stats.graded.slice(0, 5)} onOpen={onOpenAttempt} />}
+        {stats.total > 0 && stats.graded.length === 0 && <p style={{ margin: 0, fontSize: 13.5, color: C.textMid }}>Your answers are saved but not graded. Sign in to grade them from History.</p>}
+      </div>
+    </div>
+  );
+}
+function RecentList({ attempts, onOpen }) {
+  return (
+    <div>
+      {attempts.map((a) => {
+        const q = questionById(a.qid) || { prompt: "Unknown question" };
+        return (
+          <button key={a.id} onClick={() => onOpen(a.id)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0", border: "none", borderTop: "1px solid " + C.borderSoft, background: "none", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
+            <span style={{ fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.prompt}</span>
+            <AttemptBadge attempt={a} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+function AttemptBadge({ attempt }) {
+  if (attempt.status === "graded") return <span style={{ fontFamily: HAND, fontSize: 22, fontWeight: 700, color: C.red, lineHeight: 1, flexShrink: 0 }}>{attempt.grade.overall}</span>;
+  const label = attempt.status === "grading" ? "Grading…" : attempt.status === "error" ? "Not graded" : "Needs grading";
+  return <span style={{ fontSize: 12, fontWeight: 600, color: attempt.status === "error" ? C.red : C.goldDeep, flexShrink: 0 }}>{label}</span>;
+}
+
+/* ============================== PRACTICE ============================== */
+function PracticeLibrary({ attempts, stats, drafts, onStart, recommendation }) {
+  const [cat, setCat] = useState("all");
+  const [diff, setDiff] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [search, setSearch] = useState("");
+  const tried = new Set(attempts.map((a) => a.qid));
+  const list = QUESTIONS.filter((q) => (cat === "all" || q.cat === cat) && (diff === "all" || q.difficulty === diff) && (status === "all" || (status === "new" ? !tried.has(q.id) : tried.has(q.id))) && (!search.trim() || q.prompt.toLowerCase().includes(search.trim().toLowerCase())));
+  return (
+    <div className="eos-page">
+      <H1>Practice</H1>
+      <Lede style={{ marginBottom: 20 }}>Write your answer the way you'd say it out loud in an interview. It's marked on structure, assumptions, math, sanity check and clarity. New questions are worth 20 bonus XP.</Lede>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <Chip active={cat === "all"} onClick={() => setCat("all")}>All categories</Chip>
+        {CATEGORIES.map((c) => <Chip key={c.key} active={cat === c.key} onClick={() => setCat(c.key)}>{c.label}</Chip>)}
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18, alignItems: "center" }}>
+        {["all", ...DIFFICULTIES].map((d) => <Chip key={d} active={diff === d} onClick={() => setDiff(d)}>{d === "all" ? "Any difficulty" : d}</Chip>)}
+        <span style={{ width: 1, height: 20, background: C.border, margin: "0 4px" }} />
+        {[["all", "All"], ["new", "Not tried"], ["tried", "Tried"]].map(([k, l]) => <Chip key={k} active={status === k} onClick={() => setStatus(k)}>{l}</Chip>)}
+        <div style={{ flex: "1 1 200px", minWidth: 180 }}><TextInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search questions" aria-label="Search questions" /></div>
+      </div>
+      <div className="sheet" style={{ overflow: "hidden" }}>
+        {list.length === 0 && <div style={{ padding: 22, fontSize: 13.5, color: C.textMid }}>No questions match. Clear a filter to see more.</div>}
+        {list.map((q, i) => {
+          const best = stats.bestByQ[q.id];
+          const isRec = recommendation.question && recommendation.question.id === q.id;
+          return (
+            <button key={q.id} onClick={() => onStart(q.id)} className="press row-btn" style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", border: "none", borderTop: i ? "1px solid " + C.borderSoft : "none", background: isRec ? C.paleBlue : "transparent", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, color: C.text, fontWeight: 550, lineHeight: 1.4 }}>{q.prompt}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                  <DifficultyTag d={q.difficulty} />
+                  <span style={{ fontSize: 12, color: C.textMid }}>{categoryByKey(q.cat).label}</span>
+                  {isRec && <span style={{ fontSize: 12, color: C.navy, fontWeight: 650 }}>Recommended</span>}
+                  {drafts[q.id] && <span style={{ fontSize: 12, color: C.goldDeep }}>Draft saved</span>}
+                </div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0, minWidth: 54 }}>
+                {best !== undefined ? <span style={{ fontFamily: HAND, fontSize: 26, fontWeight: 700, color: C.red, lineHeight: 1 }}>{best}</span> : tried.has(q.id) ? <span style={{ fontSize: 12, color: C.goldDeep }}>Ungraded</span> : <span style={{ fontSize: 12, fontWeight: 650, color: C.goldDeep, background: C.goldSoft, borderRadius: 999, padding: "3px 8px" }}>+20 XP</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const ANSWER_TEMPLATE = "What I'm estimating: \nHow I'll break it down: \nAssumptions: \nMath: \nSanity check: \nFinal answer: ";
+function PracticeWorkspace({ question, draft, setDraft, onBack, onSubmit, resultAttempt, reward, bestScore, session, onOpenAccount, onGrade, onRetry, onNext, onAskCoach }) {
+  const [text, setText] = useState(draft || "");
+  const [hint, setHint] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [warning, setWarning] = useState("");
+  const startRef = React.useRef(Date.now());
+  const done = !!resultAttempt;
+  useEffect(() => { if (done) return; const t = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000); return () => clearInterval(t); }, [done]);
+  const target = TARGET_MINUTES[question.difficulty] * 60;
+  const over = elapsed > target;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const change = (v) => { setText(v); setDraft(question.id, v); if (warning) setWarning(""); };
+  const submit = () => {
+    if (text.trim().length < 40) { setWarning("Add a bit more first: how you'll break it down, a few assumptions, and a final number."); return; }
+    onSubmit({ qid: question.id, response: text.trim(), timeSec: elapsed, hintUsed: hint });
+  };
+  return (
+    <div className="eos-page" style={{ maxWidth: 920 }}>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: C.textMid, fontSize: 13, cursor: "pointer", padding: 0, marginBottom: 16, fontFamily: FONT }}>Back to all questions</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <DifficultyTag d={question.difficulty} />
+        <span style={{ fontSize: 12.5, color: C.textMid }}>{categoryByKey(question.cat).label}, {question.type.toLowerCase()}</span>
+        {bestScore !== undefined && <span style={{ fontSize: 12.5, color: C.textMid }}>Your best: <span style={{ fontFamily: HAND, fontSize: 19, color: C.red, fontWeight: 700 }}>{bestScore}</span></span>}
+      </div>
+      <H1 style={{ fontSize: 25, marginBottom: 18, maxWidth: 780, lineHeight: 1.3 }}>{question.prompt}</H1>
+      {done ? (
+        <ResultPanel attempt={resultAttempt} reward={reward} session={session} onOpenAccount={onOpenAccount} onGrade={onGrade} onRetry={onRetry} onNext={onNext} onAskCoach={onAskCoach} />
+      ) : (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+              <span style={{ fontSize: 24, fontWeight: 720, fontVariantNumeric: "tabular-nums", color: over ? C.red : C.navy }}>{fmtClock(elapsed)}</span>
+              <span style={{ fontSize: 12.5, color: C.textMid }}>{over ? "Past the " + TARGET_MINUTES[question.difficulty] + "-minute mark. Wrap up." : "Finish inside " + TARGET_MINUTES[question.difficulty] + " minutes for +10 XP"}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {!text.trim() && <GhostButton onClick={() => change(ANSWER_TEMPLATE)} style={{ padding: "6px 12px", fontSize: 12.5 }}>Use the outline</GhostButton>}
+              <GhostButton onClick={() => setHint((v) => !v)} style={{ padding: "6px 12px", fontSize: 12.5 }}>{hint ? "Hide hint" : "Show hint"}</GhostButton>
+            </div>
+          </div>
+          {hint && (
+            <div style={{ background: C.goldSoft, border: "1px solid #F2DD8C", borderRadius: 12, padding: "12px 14px", marginBottom: 12, fontSize: 13, lineHeight: 1.55 }}>
+              <div style={{ marginBottom: 6 }}>{question.tip}</div>
+              <div style={{ color: C.textMid }}>Strong answers usually cover {question.drivers.join(", ").toLowerCase()}.</div>
+              <div style={{ color: C.textDim, marginTop: 6, fontSize: 12 }}>Using the hint is noted on this attempt.</div>
+            </div>
+          )}
+          <textarea className="eos-editor" value={text} onChange={(e) => change(e.target.value)} aria-label="Your answer" placeholder={"Say what you're estimating and for what period. Break it into pieces, put a number on each one and say why. Show the math, check it against something real, and finish with one clear number."} style={{ width: "100%", boxSizing: "border-box", minHeight: 320, background: C.panel, border: "1px solid " + C.border, borderRadius: 14, padding: "16px 18px", fontSize: 14.5, lineHeight: 1.7, color: C.text, fontFamily: FONT, resize: "vertical", outline: "none" }} />
+          <div className="eos-workspace-actions" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 10 }}>
+            <span style={{ fontSize: 12.5, color: C.textDim }}>{words} words. Your draft saves as you type.</span>
+            <PrimaryButton onClick={submit} style={{ justifyContent: "center", padding: "11px 18px", fontSize: 13.5 }}>{session ? (session.artifact ? "Submit for grading" : "Submit for grading (1 credit)") : "Save answer"}</PrimaryButton>
+          </div>
+          {!session && <div style={{ marginTop: 8, fontSize: 12.5, color: C.textMid, textAlign: "right" }}>Sign in to get it graded. Saved answers can be graded later from History.</div>}
+          {warning && <div role="alert" style={{ marginTop: 10, fontSize: 13, color: C.red }}>{warning}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResultPanel({ attempt, reward, session, onOpenAccount, onGrade, onRetry, onNext, onAskCoach, showAnswer }) {
+  const [answerOpen, setAnswerOpen] = useState(!!showAnswer);
+  if (attempt.status === "grading") {
+    return <div className="sheet" style={{ padding: 22 }}><div className="pulse-dot" style={{ fontSize: 15, fontWeight: 650 }}>Marking your answer…</div><div style={{ fontSize: 13, color: C.textMid, marginTop: 6 }}>Checking your structure, assumptions and arithmetic. Usually a few seconds.</div></div>;
+  }
+  if (attempt.status !== "graded") {
+    return (
+      <div className="sheet" style={{ padding: 22 }}>
+        <div style={{ fontSize: 15, fontWeight: 650 }}>{attempt.status === "error" ? "This answer wasn't graded" : "Answer saved"}</div>
+        <div style={{ fontSize: 13, color: attempt.status === "error" ? C.red : C.textMid, marginTop: 6, lineHeight: 1.5 }}>{attempt.status === "error" ? attempt.error : "It's in your History. Sign in to get it graded. New accounts get 20 free credits."}</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+          {session ? <PrimaryButton onClick={() => onGrade(attempt.id)}>Grade this answer</PrimaryButton> : <PrimaryButton onClick={onOpenAccount}>Sign in to grade</PrimaryButton>}
+          {onRetry && <GhostButton onClick={onRetry}>Try this question again</GhostButton>}
+        </div>
+        <RewardFeed reward={reward} />
+      </div>
+    );
+  }
+  const g = attempt.grade;
+  const block = (title, body) => body ? <div style={{ marginTop: 18 }}><h3 style={{ margin: "0 0 6px", fontSize: 13.5, fontWeight: 650 }}>{title}</h3>{body}</div> : null;
+  const bullets = (items) => items.length ? <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6 }}>{items.map((t, i) => <li key={i} style={{ marginBottom: 3 }}>{t}</li>)}</ul> : null;
+  return (
+    <div className="sheet" style={{ padding: 24 }}>
+      <div style={{ display: "flex", gap: 28, alignItems: "center", flexWrap: "wrap" }}>
+        <RedPenScore value={g.overall} />
+        <div style={{ flex: "1 1 280px", minWidth: 0 }}>
+          <p style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.5 }}>{g.verdict}</p>
+          <RubricBars scores={g.scores} />
+        </div>
+      </div>
+      <RewardFeed reward={reward} />
+      <div className="eos-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {block("What worked", bullets(g.strengths))}
+        {block("What cost you points", bullets(g.improvements))}
+      </div>
+      {block("A stronger approach", <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65 }}>{g.modelApproach}</p>)}
+      {g.mathIssues && block("Math to fix", <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: C.red }}>{g.mathIssues}</p>)}
+      {g.nextStep && <p style={{ margin: "18px 0 0", background: C.paleBlue, borderRadius: 10, padding: "11px 13px", fontSize: 13.5, color: C.navy, lineHeight: 1.5 }}><strong>Next attempt:</strong> {g.nextStep}</p>}
+      <div style={{ marginTop: 14, fontSize: 12.5, color: C.textDim }}>Answered in {fmtClock(attempt.timeSec || 0)}{attempt.hintUsed ? " with the hint" : ""} on {fmtDate(new Date(attempt.createdAt))}.</div>
+      <div style={{ marginTop: 12 }}>
+        <button onClick={() => setAnswerOpen((v) => !v)} aria-expanded={answerOpen} style={{ background: "none", border: "none", color: C.navy, fontSize: 13, fontWeight: 650, cursor: "pointer", padding: 0, fontFamily: FONT }}>{answerOpen ? "Hide your answer" : "Show your answer"}</button>
+        {answerOpen && <div style={{ marginTop: 8, whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.6, background: C.panelAlt, borderRadius: 10, padding: "12px 14px" }}>{attempt.response}</div>}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 18, flexWrap: "wrap" }}>
+        {onNext && <PrimaryButton onClick={onNext}>Next question</PrimaryButton>}
+        {onRetry && <GhostButton onClick={onRetry}>Try this one again</GhostButton>}
+        {onAskCoach && <GhostButton onClick={() => onAskCoach(attempt)}>Ask the coach about it</GhostButton>}
+      </div>
+    </div>
+  );
+}
+
+/* ============================== HISTORY ============================== */
+function HistoryView({ attempts, onOpen, onStartPractice }) {
+  const [filter, setFilter] = useState("all");
+  const list = attempts.filter((a) => filter === "all" || (filter === "graded" ? a.status === "graded" : a.status !== "graded"));
+  const ungraded = attempts.filter((a) => a.status !== "graded").length;
+  return (
+    <div className="eos-page" style={{ maxWidth: 920 }}>
+      <H1>History</H1>
+      <Lede style={{ marginBottom: 18 }}>Every answer you've submitted. Open one to reread its marking, or grade one you saved while signed out.</Lede>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <Chip active={filter === "all"} onClick={() => setFilter("all")}>All ({attempts.length})</Chip>
+        <Chip active={filter === "graded"} onClick={() => setFilter("graded")}>Graded</Chip>
+        <Chip active={filter === "ungraded"} onClick={() => setFilter("ungraded")}>Needs grading ({ungraded})</Chip>
+      </div>
+      <div className="sheet" style={{ overflow: "hidden" }}>
+        {list.length === 0 && (
+          <div style={{ padding: 22 }}>
+            <p style={{ margin: "0 0 12px", fontSize: 13.5, color: C.textMid }}>{attempts.length ? "Nothing matches this filter." : "No answers yet. Your first one shows up here with its marking."}</p>
+            {!attempts.length && <PrimaryButton onClick={onStartPractice}>Go to practice</PrimaryButton>}
+          </div>
+        )}
+        {list.map((a, i) => {
+          const q = questionById(a.qid) || { prompt: "Unknown question" };
+          return (
+            <button key={a.id} onClick={() => onOpen(a.id)} className="press row-btn" style={{ width: "100%", display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", border: "none", borderTop: i ? "1px solid " + C.borderSoft : "none", background: "transparent", cursor: "pointer", textAlign: "left", fontFamily: FONT }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 550, lineHeight: 1.4 }}>{q.prompt}</div>
+                <div style={{ fontSize: 12, color: C.textMid, marginTop: 5 }}>{fmtDate(new Date(a.createdAt))}, {fmtClock(a.timeSec || 0)}{a.hintUsed ? ", used the hint" : ""}</div>
+              </div>
+              <AttemptBadge attempt={a} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============================== COACH ============================== */
+function CoachView({ profile, stats, game, attempts, recommendation, session, credits, refreshCredits, onOpenAccount, onStart, seed, clearSeed }) {
+  const greetingText = session
+    ? "Hi " + ((profile.name || "there").split(" ")[0]) + ". I can see your scores, your rubric breakdown and your recent answers. Ask me how to break a question down, why you're losing points, or for something to practice."
+    : "Sign in at the top right to talk to me. New accounts get 20 free credits.";
+  const [messages, setMessages] = useState([{ id: "m0", from: "coach", text: greetingText }]);
+  const [input, setInput] = useState(seed || "");
+  const [sending, setSending] = useState(false);
+  const historyRef = React.useRef([]);
+  const bottomRef = React.useRef(null);
+  useEffect(() => { if (seed) { setInput(seed); clearSeed(); } }, [seed]);
+  useEffect(() => { setMessages((m) => (m.length === 1 ? [{ id: "m0", from: "coach", text: greetingText }] : m)); }, [!!session]);
+  useEffect(() => { if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages]);
+
+  const send = async (raw) => {
+    const text = (raw || "").trim();
+    if (!text || sending) return;
+    setInput("");
+    const userMsg = { id: "u" + Date.now(), from: "user", text };
+    if (!session) { setMessages((m) => [...m, userMsg, { id: "c" + Date.now(), from: "coach", text: "Sign in first, at the top right. New accounts get 20 free credits." }]); onOpenAccount(); return; }
+    const replyId = "c" + Date.now();
+    setMessages((m) => [...m, userMsg, { id: replyId, from: "coach", text: "Thinking…", typing: true }]);
+    setSending(true);
+    const turnId = newTurnId();
+    const gameLine = "\nGame progress: level " + game.level.level + " (" + game.level.title + "), " + game.level.xp + " XP. Today's quests: " + game.todayQuests.map((q) => q.label + (q.done ? " (done)" : "")).join("; ") + ".";
+    let working = [{ role: "system", content: buildCoachSystemPrompt({ profile, stats, attempts, recommendation }) + gameLine }, ...historyRef.current, { role: "user", content: text }];
+    let offered = null;
+    window.__eosToolHandler = (name, args) => { if (name !== "open_question") return { ok: false }; const q = pickQuestion(args, attempts); if (!q) return { ok: false, error: "No matching question." }; offered = q; return { ok: true, questionId: q.id, prompt: q.prompt, category: categoryByKey(q.cat).label, difficulty: q.difficulty }; };
+    try {
+      let finalText = "";
+      for (let round = 0; round < 4; round++) {
+        const data = await callChat(session, working, turnId, COACH_TOOL_SCHEMAS.map((t) => ({ type: "function", function: t })));
+        const message = ((data.choices || [])[0] || {}).message || {};
+        const calls = message.tool_calls || [];
+        if (calls.length) {
+          const call = calls[0];
+          let args = {};
+          try { args = JSON.parse(call.function.arguments || "{}"); } catch (e) { args = {}; }
+          const result = window.__eosToolHandler(call.function.name, args);
+          working = working.concat([{ role: "assistant", content: message.content || null, tool_calls: calls }, { role: "tool", tool_call_id: call.id, content: JSON.stringify(result) }]);
+          continue;
+        }
+        finalText = message.content || "";
+        working = working.concat([{ role: "assistant", content: finalText }]);
+        break;
+      }
+      historyRef.current = working.slice(1).slice(-16);
+      setMessages((m) => m.map((x) => (x.id === replyId ? { id: replyId, from: "coach", text: finalText || "…", qid: offered ? offered.id : null } : x)));
+    } catch (err) {
+      const msg = err.code === "no_credits" ? "You're out of credits. Buy more from the account menu at the top right." : err.code === "rate_limited" ? "The coach is busy. Your credit wasn't used. Try again in a minute." : "Couldn't reach the coach. " + (err.message || "");
+      setMessages((m) => m.map((x) => (x.id === replyId ? { id: replyId, from: "coach", text: msg } : x)));
+    } finally {
+      setSending(false);
+      refreshCredits();
+    }
+  };
+
+  return (
+    <div className="eos-page" style={{ maxWidth: 920 }}>
+      <H1>Coach</H1>
+      <Lede style={{ marginBottom: 18 }}>Ask about breaking questions down, picking assumptions, quick mental math, or your scores. Each message uses one credit.</Lede>
+      <div className="sheet coach-card" style={{ padding: 20, marginBottom: 14, display: "flex", flexDirection: "column" }}>
+        {messages.map((m) => {
+          const q = m.qid ? questionById(m.qid) : null;
+          return (
+            <div key={m.id}>
+              <CoachMessage from={m.from} text={m.text} typing={m.typing} />
+              {q && (
+                <button className="press" onClick={() => onStart(q.id)} style={{ margin: "-4px 0 14px", display: "flex", alignItems: "center", gap: 10, maxWidth: "82%", textAlign: "left", background: C.navy, color: "#fff", border: "none", borderRadius: 12, padding: "10px 14px", cursor: "pointer", fontFamily: FONT }}>
+                  <Icons.Target size={14} color={C.gold} />
+                  <span style={{ fontSize: 13, lineHeight: 1.4 }}><strong>Start:</strong> {q.prompt}</span>
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>{COACH_QUICK.map((q) => <Chip key={q} active={false} onClick={() => send(q)}>{q}</Chip>)}</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+        <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={input.length > 90 ? 4 : 1} aria-label="Message the coach" placeholder="Ask anything. Enter sends, Shift+Enter adds a line." style={{ ...inputStyle, flex: 1, resize: "vertical", lineHeight: 1.5, fontSize: 14, background: C.panel }} />
+        <PrimaryButton onClick={() => send(input)} style={{ opacity: sending ? 0.6 : 1 }}>Send</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== SETTINGS & WELCOME ============================== */
+function ProfileFields({ draft, setDraft }) {
+  return (
+    <div>
+      <FieldLabel>Your name</FieldLabel>
+      <TextInput value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="First name is fine" />
+      <div style={{ marginTop: 16 }}><FieldLabel>What are you preparing for?</FieldLabel></div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{GOALS.map((g) => <Chip key={g} active={draft.goal === g} onClick={() => setDraft({ ...draft, goal: g })}>{g}</Chip>)}</div>
+      <div style={{ marginTop: 16 }}><FieldLabel>How much guesstimate practice have you done?</FieldLabel></div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{LEVELS.map((l) => <Chip key={l} active={draft.level === l} onClick={() => setDraft({ ...draft, level: l })}>{l}</Chip>)}</div>
+    </div>
+  );
+}
+function SettingsView({ profile, setProfile, onReset }) {
+  const [draft, setDraft] = useState(profile);
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="eos-page" style={{ maxWidth: 660 }}>
+      <H1 style={{ marginBottom: 18 }}>Profile & settings</H1>
+      <div className="sheet" style={{ padding: 22, marginBottom: 16 }}>
+        <ProfileFields draft={draft} setDraft={(d) => { setDraft(d); setSaved(false); }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
+          <PrimaryButton onClick={() => { setProfile({ ...draft, name: draft.name.trim() || profile.name }); setSaved(true); }}>Save profile</PrimaryButton>
+          {saved && <span style={{ fontSize: 13, color: C.green }}>Saved</span>}
+        </div>
+      </div>
+      <div className="sheet" style={{ padding: 22 }}>
+        <SectionHead>Your data</SectionHead>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: C.textMid, lineHeight: 1.55 }}>Answers, drafts, scores and XP live in this browser. Deleting them can't be undone. Your credits aren't affected.</p>
+        <GhostButton onClick={() => { if (window.confirm("Delete all answers, drafts, scores and XP on this device?")) onReset(); }} style={{ color: C.red, borderColor: "#F3C4BF" }}>Delete all practice data</GhostButton>
+      </div>
+    </div>
+  );
+}
+function WelcomeScreen({ onFinish }) {
+  const [draft, setDraft] = useState({ name: "", goal: GOALS[0], level: LEVELS[0] });
+  const [error, setError] = useState("");
+  const start = () => { if (!draft.name.trim()) { setError("Add your name to continue."); return; } onFinish({ ...draft, name: draft.name.trim() }); };
+  return (
+    <div className="full-screen-shell graph-paper" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT, color: C.text }}>
+      <div style={{ width: "100%", maxWidth: 540 }}>
+        <Logo size={19} />
+        <h1 style={{ margin: "24px 0 6px", fontSize: 36, fontWeight: 720, letterSpacing: -1.2, lineHeight: 1.1 }}>How many piano tuners are in Chicago?</h1>
+        <div style={{ fontFamily: HAND, fontSize: 28, color: C.red, transform: "rotate(-2deg)", margin: "0 0 14px" }}>Show your working. We'll mark it.</div>
+        <p style={{ margin: "0 0 24px", fontSize: 14.5, color: C.textMid, lineHeight: 1.6 }}>Fifty guesstimates across ten categories. Each answer is scored on structure, assumptions, math, sanity check and clarity, and earns XP toward your next level.</p>
+        <div className="sheet" style={{ padding: 22 }}>
+          <ProfileFields draft={draft} setDraft={(d) => { setDraft(d); setError(""); }} />
+          {error && <div role="alert" style={{ marginTop: 12, fontSize: 13, color: C.red }}>{error}</div>}
+          <PrimaryButton onClick={start} style={{ marginTop: 20, width: "100%", justifyContent: "center", padding: "12px 16px", fontSize: 14.5 }}>Start practicing</PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== ROOT ============================== */
+function EstimateOS() {
+  const persisted = useMemo(() => loadState(), []);
+  const [profile, setProfile] = useState((persisted && persisted.profile) || null);
+  const [attempts, setAttempts] = useState((persisted && persisted.attempts) || []);
+  const [drafts, setDrafts] = useState((persisted && persisted.drafts) || {});
+  const [insight, setInsight] = useState((persisted && persisted.insight) || null);
+  const [active, setActive] = useState("dashboard");
+  const [openQid, setOpenQid] = useState(null);
+  const [resultId, setResultId] = useState(null);
+  const [workspaceNonce, setWorkspaceNonce] = useState(0);
+  const [modalAttemptId, setModalAttemptId] = useState(null);
+  const [coachSeed, setCoachSeed] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const [rewards, setRewards] = useState({});
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const attemptsRef = React.useRef(attempts);
+  const snapshotsRef = React.useRef({});
+  useEffect(() => { attemptsRef.current = attempts; }, [attempts]);
+
+  /* ---- Account: Supabase auth + credits (unchanged from before) ---- */
+  const [session, setSession] = useState(null);
+  const [credits, setCredits] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const sessionRef = React.useRef(null);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+  const refreshCredits = async (s) => {
+    const cur = s || sessionRef.current;
+    if (!sb || !cur || cur.artifact) { setCredits(null); return; }
+    try { const res = await fetch("/api/me", { headers: { Authorization: "Bearer " + cur.access_token } }); if (res.ok) { const d = await res.json(); setCredits(d.credits); } } catch (e) { /* stale until next success */ }
+  };
+  useEffect(() => {
+    if (!sb) return;
+    sb.auth.getSession().then(({ data }) => { setSession(data.session); if (data.session) refreshCredits(data.session); });
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => { setSession(s); if (s) refreshCredits(s); else setCredits(null); });
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout")) { if (params.get("checkout") === "success") setAccountOpen(true); window.history.replaceState({}, "", window.location.pathname); }
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  const sendMagicLink = async (email) => {
+    if (!sb) return { ok: false, message: "Sign-in isn't set up on this site." };
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
+    return error ? { ok: false, message: error.message } : { ok: true, message: "Check your email for the sign-in link." };
+  };
+  const signOutAccount = async () => { if (sb) await sb.auth.signOut(); };
+  const buyCreditPack = async (pack) => {
+    if (!session) return { ok: false, message: "Sign in first." };
+    try {
+      const res = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token }, body: JSON.stringify({ pack }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.url) { window.location.href = d.url; return { ok: true }; }
+      return { ok: false, message: "Payments aren't set up yet. Your free credits still work." };
+    } catch (e) { return { ok: false, message: "Couldn't open checkout. Check your connection and try again." }; }
+  };
+
+  useEffect(() => { if (profile) saveState({ profile, attempts, drafts, insight }); }, [profile, attempts, drafts, insight]);
+
+  const stats = useMemo(() => computeStats(attempts), [attempts]);
+  const game = useMemo(() => computeGame(attempts), [attempts]);
+  const recommendation = useMemo(() => recommendNext(attempts, stats, profile || {}), [attempts, stats, profile]);
+
+  const pushToast = (t) => setToasts((q) => [...q, t]);
+  const celebrateReward = (reward) => {
+    if (reward.levelUp) { pushToast({ kind: "level", mark: "Lv " + reward.levelUp.level, title: "Level up", desc: reward.levelUp.title }); celebrate("big"); }
+    else if (reward.newBadges.length || reward.beatBest || reward.allQuests) celebrate("small");
+    reward.newBadges.forEach((b) => pushToast({ kind: "badge", mark: b.mark, title: "Badge earned: " + b.label, desc: b.desc }));
+    if (reward.allQuests) pushToast({ kind: "quest", mark: "3/3", title: "Today's quests done", desc: "+" + ALL_QUESTS_BONUS + " XP bonus" });
+  };
+
+  const updateAttempt = (id, patch) => { attemptsRef.current = attemptsRef.current.map((a) => (a.id === id ? { ...a, ...patch } : a)); setAttempts(attemptsRef.current); };
+  const setDraft = (qid, text) => setDrafts((d) => ({ ...d, [qid]: text }));
+
+  const runGrade = async (attemptId) => {
+    const s = sessionRef.current;
+    const attempt = attemptsRef.current.find((a) => a.id === attemptId);
+    if (!attempt) return;
+    if (!s) { setAccountOpen(true); return; }
+    const presubmit = snapshotsRef.current[attemptId];
+    delete snapshotsRef.current[attemptId];
+    const before = presubmit || computeGame(attemptsRef.current);
+    updateAttempt(attemptId, { status: "grading", error: null });
+    try {
+      const history = gradedAttempts(attemptsRef.current).filter((a) => a.id !== attemptId).slice(0, 5);
+      const grade = await gradeWithAI({ session: s, attempt, question: questionById(attempt.qid), profile, history });
+      updateAttempt(attemptId, { status: "graded", grade, gradedAt: new Date().toISOString() });
+      const after = computeGame(attemptsRef.current);
+      const reward = rewardDiff(before, after, attempt, attemptsRef.current, !!presubmit);
+      setRewards((r) => ({ ...r, [attemptId]: reward }));
+      celebrateReward(reward);
+      if (grade.trendInsight || grade.nextStep) setInsight({ text: grade.trendInsight, nextStep: grade.nextStep, updatedAt: new Date().toISOString() });
+    } catch (e) {
+      const message = e.code === "no_credits" ? "You're out of credits. Buy more from the account menu, then grade it again."
+        : e.code === "rate_limited" ? "The grader is busy. Your credit wasn't used. Try again in a minute."
+        : e.code === "parse" ? "The grader sent back something unreadable. Try grading again."
+        : e.code === "auth" ? e.message
+        : "Couldn't reach the grader. " + (e.message || "");
+      updateAttempt(attemptId, { status: "error", error: message });
+    } finally { refreshCredits(); }
+  };
+  const submitAttempt = ({ qid, response, timeSec, hintUsed }) => {
+    const before = computeGame(attemptsRef.current);
+    const attempt = { id: uid(), qid, response, timeSec, hintUsed, createdAt: new Date().toISOString(), status: session ? "grading" : "pending", grade: null };
+    attemptsRef.current = [attempt, ...attemptsRef.current];
+    setAttempts(attemptsRef.current);
+    setDrafts((d) => { const n = { ...d }; delete n[qid]; return n; });
+    setResultId(attempt.id);
+    if (session) { snapshotsRef.current[attempt.id] = before; runGrade(attempt.id); }
+    else { const reward = rewardDiff(before, computeGame(attemptsRef.current), attempt, attemptsRef.current, true); setRewards((r) => ({ ...r, [attempt.id]: reward })); celebrateReward(reward); }
+  };
+  const startQuestion = (qid) => { setOpenQid(qid); setResultId(null); setWorkspaceNonce((n) => n + 1); setModalAttemptId(null); setActive("practice"); };
+  const askCoachAbout = (attempt) => {
+    const q = questionById(attempt.qid) || {};
+    const g = attempt.grade;
+    setCoachSeed("I answered \"" + q.prompt + "\"" + (g ? " and scored " + g.overall + ". The grader said: " + g.verdict : "") + "\n\nMy answer:\n" + (attempt.response || "").slice(0, 900) + "\n\nWhat should I change to score higher?");
+    setModalAttemptId(null);
+    setActive("coach");
+  };
+  const resetData = () => { attemptsRef.current = []; setAttempts([]); setDrafts({}); setInsight(null); setOpenQid(null); setResultId(null); setRewards({}); };
+
+  if (!profile) return <WelcomeScreen onFinish={(p) => setProfile(p)} />;
+
+  const go = (k) => { setActive(k); if (k !== "practice") setOpenQid(null); };
+  const navLabel = (NAV_ITEMS.find((n) => n.key === active) || {}).label || (active === "settings" ? "Profile & settings" : "");
+  const openQuestion = openQid ? questionById(openQid) : null;
+  const resultAttempt = resultId ? attempts.find((a) => a.id === resultId && a.qid === openQid) : null;
+  const modalAttempt = modalAttemptId ? attempts.find((a) => a.id === modalAttemptId) : null;
+
+  let content;
+  if (active === "dashboard") content = <DashboardView profile={profile} stats={stats} game={game} insight={insight} recommendation={recommendation} onStart={startQuestion} onOpenAttempt={setModalAttemptId} setActive={go} />;
+  else if (active === "practice") content = openQuestion
+    ? <PracticeWorkspace key={openQid + ":" + workspaceNonce} question={openQuestion} draft={drafts[openQid]} setDraft={setDraft} onBack={() => { setOpenQid(null); setResultId(null); }} onSubmit={submitAttempt} resultAttempt={resultAttempt} reward={resultAttempt ? rewards[resultAttempt.id] : null} bestScore={stats.bestByQ[openQid]} session={session} onOpenAccount={() => setAccountOpen(true)} onGrade={runGrade} onRetry={() => startQuestion(openQid)} onNext={() => startQuestion(recommendation.question.id)} onAskCoach={askCoachAbout} />
+    : <PracticeLibrary attempts={attempts} stats={stats} drafts={drafts} onStart={startQuestion} recommendation={recommendation} />;
+  else if (active === "history") content = <HistoryView attempts={attempts} onOpen={setModalAttemptId} onStartPractice={() => go("practice")} />;
+  else if (active === "coach") content = <CoachView profile={profile} stats={stats} game={game} attempts={attempts} recommendation={recommendation} session={session} credits={credits} refreshCredits={refreshCredits} onOpenAccount={() => setAccountOpen(true)} onStart={startQuestion} seed={coachSeed} clearSeed={() => setCoachSeed("")} />;
+  else if (active === "settings") content = <SettingsView profile={profile} setProfile={setProfile} onReset={resetData} />;
+
+  return (
+    <div className="app-shell" style={{ display: "flex", flexDirection: "column", width: "100%", background: C.bg, fontFamily: FONT, color: C.text, position: "relative", overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <Sidebar active={active} setActive={go} game={game} />
+        <div className="app-main-col" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+          <Topbar userName={profile.name} game={game} streak={stats.streak} viewLabel={navLabel} setMobileNavOpen={setMobileNavOpen} session={session} credits={credits} onOpenAccount={() => setAccountOpen(true)} />
+          <main className="scoreos-canvas graph-paper" style={{ flex: 1, overflowY: "auto" }}>{content}</main>
+        </div>
+      </div>
+      <MobileNavDrawer open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} active={active} setActive={go} game={game} />
+      <Modal open={!!modalAttempt} onClose={() => setModalAttemptId(null)} title={modalAttempt ? (questionById(modalAttempt.qid) || {}).prompt : ""} width={740}>
+        {modalAttempt && <ResultPanel attempt={modalAttempt} reward={rewards[modalAttempt.id]} session={session} onOpenAccount={() => setAccountOpen(true)} onGrade={runGrade} onRetry={() => startQuestion(modalAttempt.qid)} onAskCoach={askCoachAbout} showAnswer />}
+      </Modal>
+      <GameToast toast={toasts[0] || null} onDone={() => setToasts((q) => q.slice(1))} />
+      <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} session={session} credits={credits} onSendLink={sendMagicLink} onSignOut={signOutAccount} onBuyPack={buyCreditPack} />
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<EstimateOS />);
+
+</script>
+</body>
+</html>
